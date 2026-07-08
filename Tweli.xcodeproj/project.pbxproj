@@ -6,7 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D1D1D1D1D1D1D1D1D1D1000D /* TweliWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D1D1D1D1D1D1D1D1D1D10001 /* TweliWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		D1D1D1D1D1D1D1D1D1D1000A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F03544442FFD70A500CB4849 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D1D1D1D1D1D1D1D1D1D10003;
+			remoteInfo = TweliWidgetExtension;
+		};
 		F035445A2FFD70A500CB4849 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F03544442FFD70A500CB4849 /* Project object */;
@@ -23,13 +34,36 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		D1D1D1D1D1D1D1D1D1D1000C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D1D1D1D1D1D1D1D1D1D1000D /* TweliWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		D1D1D1D1D1D1D1D1D1D10001 /* TweliWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TweliWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F035444C2FFD70A500CB4849 /* Tweli.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tweli.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F03544592FFD70A500CB4849 /* TweliTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TweliTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F03544632FFD70A500CB4849 /* TweliUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TweliUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		D1D1D1D1D1D1D1D1D1D10002 /* TweliWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D1D1D1D1D1D1D1D1D1D1000E /* Exceptions for "TweliWidget" folder in "TweliWidgetExtension" target */,
+			);
+			path = TweliWidget;
+			sourceTree = "<group>";
+		};
 		F035444E2FFD70A500CB4849 /* Tweli */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Tweli;
@@ -47,7 +81,25 @@
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D1D1D1D1D1D1D1D1D1D1000E /* Exceptions for "TweliWidget" folder in "TweliWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				TweliWidget.entitlements,
+			);
+			target = D1D1D1D1D1D1D1D1D1D10003 /* TweliWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFrameworksBuildPhase section */
+		D1D1D1D1D1D1D1D1D1D10005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F03544492FFD70A500CB4849 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -86,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				F035444C2FFD70A500CB4849 /* Tweli.app */,
+				D1D1D1D1D1D1D1D1D1D10001 /* TweliWidgetExtension.appex */,
 				F03544592FFD70A500CB4849 /* TweliTests.xctest */,
 				F03544632FFD70A500CB4849 /* TweliUITests.xctest */,
 			);
@@ -95,6 +148,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		D1D1D1D1D1D1D1D1D1D10003 /* TweliWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1D1D1D1D1D1D1D1D1D10007 /* Build configuration list for PBXNativeTarget "TweliWidgetExtension" */;
+			buildPhases = (
+				D1D1D1D1D1D1D1D1D1D10004 /* Sources */,
+				D1D1D1D1D1D1D1D1D1D10005 /* Frameworks */,
+				D1D1D1D1D1D1D1D1D1D10006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D1D1D1D1D1D1D1D1D1D10002 /* TweliWidget */,
+			);
+			name = TweliWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = TweliWidgetExtension;
+			productReference = D1D1D1D1D1D1D1D1D1D10001 /* TweliWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		F035444B2FFD70A500CB4849 /* Tweli */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F035446D2FFD70A500CB4849 /* Build configuration list for PBXNativeTarget "Tweli" */;
@@ -102,10 +177,12 @@
 				F03544482FFD70A500CB4849 /* Sources */,
 				F03544492FFD70A500CB4849 /* Frameworks */,
 				F035444A2FFD70A500CB4849 /* Resources */,
+				D1D1D1D1D1D1D1D1D1D1000C /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D1D1D1D1D1D1D1D1D1D1000B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F035444E2FFD70A500CB4849 /* Tweli */,
@@ -184,6 +261,9 @@
 						CreatedOnToolsVersion = 26.4.1;
 						TestTargetID = F035444B2FFD70A500CB4849;
 					};
+					D1D1D1D1D1D1D1D1D1D10003 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
 				};
 			};
 			buildConfigurationList = F03544472FFD70A500CB4849 /* Build configuration list for PBXProject "Tweli" */;
@@ -201,6 +281,7 @@
 			projectRoot = "";
 			targets = (
 				F035444B2FFD70A500CB4849 /* Tweli */,
+				D1D1D1D1D1D1D1D1D1D10003 /* TweliWidgetExtension */,
 				F03544582FFD70A500CB4849 /* TweliTests */,
 				F03544622FFD70A500CB4849 /* TweliUITests */,
 			);
@@ -208,6 +289,13 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		D1D1D1D1D1D1D1D1D1D10006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F035444A2FFD70A500CB4849 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -232,6 +320,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		D1D1D1D1D1D1D1D1D1D10004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F03544482FFD70A500CB4849 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -256,6 +351,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		D1D1D1D1D1D1D1D1D1D1000B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D1D1D1D1D1D1D1D1D1D10003 /* TweliWidgetExtension */;
+			targetProxy = D1D1D1D1D1D1D1D1D1D1000A /* PBXContainerItemProxy */;
+		};
 		F035445B2FFD70A500CB4849 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F035444B2FFD70A500CB4849 /* Tweli */;
@@ -395,6 +495,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Tweli/Tweli.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 649T62WKAQ;
@@ -427,6 +528,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Tweli/Tweli.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 649T62WKAQ;
@@ -538,6 +640,55 @@
 			};
 			name = Release;
 		};
+		D1D1D1D1D1D1D1D1D1D10008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TweliWidget/TweliWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 649T62WKAQ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TweliWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.adithyan.shalinth.Tweli.TweliWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D1D1D1D1D1D1D1D1D1D10009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TweliWidget/TweliWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 649T62WKAQ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TweliWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.adithyan.shalinth.Tweli.TweliWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -573,6 +724,15 @@
 			buildConfigurations = (
 				F03544742FFD70A500CB4849 /* Debug */,
 				F03544752FFD70A500CB4849 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D1D1D1D1D1D1D1D1D1D10007 /* Build configuration list for PBXNativeTarget "TweliWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1D1D1D1D1D1D1D1D1D10008 /* Debug */,
+				D1D1D1D1D1D1D1D1D1D10009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
