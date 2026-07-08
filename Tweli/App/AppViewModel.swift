@@ -99,6 +99,10 @@ final class AppViewModel: ObservableObject {
         let cd = countdownService.pinned
         let mood = moodService.partnerMood
         let date = virtualDateService.next
+        let ping = missingYouService.history.first
+        let pingFrom = ping.map {
+            $0.sentBy == currentUser.id ? "You" : (coupleSpaceService.partner?.displayName ?? "Partner")
+        } ?? "—"
         let snapshot = WidgetSnapshot(
             daysUntil: cd?.daysRemaining ?? 0,
             countdownTitle: cd?.title ?? "No countdown yet",
@@ -106,7 +110,10 @@ final class AppViewModel: ObservableObject {
             partnerMood: mood?.mood.label ?? "—",
             partnerMoodEmoji: mood?.mood.emoji ?? "💗",
             nextDateTitle: date?.title ?? "No date planned",
-            nextDateTime: date.map { $0.date.formatted(date: .omitted, time: .shortened) } ?? "—"
+            nextDateTime: date.map { $0.date.formatted(date: .omitted, time: .shortened) } ?? "—",
+            lastPingMessage: ping?.message ?? "Send a little love",
+            lastPingFrom: pingFrom,
+            lastPingWhen: ping?.relativeLabel ?? ""
         )
         widget.update(snapshot)
     }

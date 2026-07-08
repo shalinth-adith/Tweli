@@ -12,5 +12,6 @@ struct TweliWidgetBundle: WidgetBundle {
         CountdownWidget()
         PartnerMoodWidget()
         NextDateWidget()
+        LastPingWidget()
     }
 }

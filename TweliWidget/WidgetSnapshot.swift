@@ -17,6 +17,10 @@ struct WidgetSnapshot: Codable, Equatable {
     var partnerMoodEmoji: String
     var nextDateTitle: String
     var nextDateTime: String
+    // Latest missing-you ping (reflects a "send love" tap in the widget).
+    var lastPingMessage: String = "Send a little love"
+    var lastPingFrom: String = "—"
+    var lastPingWhen: String = ""
 
     static let placeholder = WidgetSnapshot(
         daysUntil: 21,
@@ -25,7 +29,10 @@ struct WidgetSnapshot: Codable, Equatable {
         partnerMood: "Missing you",
         partnerMoodEmoji: "🥺",
         nextDateTitle: "Movie night",
-        nextDateTime: "9:30 PM"
+        nextDateTime: "9:30 PM",
+        lastPingMessage: "Anaya misses you ❤️",
+        lastPingFrom: "Anaya",
+        lastPingWhen: "2h ago"
     )
 
     static let appGroupId = "group.me.adithyan.shalinth.Tweli"
