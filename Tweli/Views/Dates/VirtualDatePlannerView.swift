@@ -12,7 +12,10 @@ struct VirtualDatePlannerView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                if let next = service.next { nextHero(next) }
+                if let next = service.next {
+                    NavigationLink(value: next) { nextHero(next) }
+                        .buttonStyle(.plain)
+                }
 
                 VStack(alignment: .leading, spacing: 10) {
                     SectionHeader("Planned")
@@ -23,11 +26,14 @@ struct VirtualDatePlannerView: View {
                                        actionTitle: "Add Virtual Date") { showAdd = true }
                     } else {
                         ForEach(service.planned) { date in
-                            VirtualDateRowView(date: date)
-                                .contextMenu {
-                                    Button("Mark completed") { service.setStatus(date, .completed) }
-                                    Button("Cancel date", role: .destructive) { service.setStatus(date, .cancelled) }
-                                }
+                            NavigationLink(value: date) {
+                                VirtualDateRowView(date: date)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("Mark completed") { service.setStatus(date, .completed) }
+                                Button("Cancel date", role: .destructive) { service.setStatus(date, .cancelled) }
+                            }
                         }
                     }
                 }
@@ -36,6 +42,7 @@ struct VirtualDatePlannerView: View {
         }
         .background(Color.twBackground.ignoresSafeArea())
         .navigationTitle("Virtual Dates")
+        .navigationDestination(for: VirtualDateItem.self) { VirtualDateDetailView(date: $0) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showAdd = true } label: { Image(systemName: "plus") }
