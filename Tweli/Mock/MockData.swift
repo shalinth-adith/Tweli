@@ -136,6 +136,11 @@ enum MockData {
         [.missingYou, .missingYou, .excitedToMeet, .lowEnergy, .missingYou, .needReassurance, .missingYou]
     }
 
+    /// Current user's mood over the last 7 days (oldest → newest).
+    static var myWeekMoods: [PartnerMood] {
+        [.busyToday, .lowEnergy, .missingYou, .excitedToMeet, .missingYou, .needCall, .excitedToMeet]
+    }
+
     // MARK: - Pings
 
     static var pings: [MissingYouPing] {

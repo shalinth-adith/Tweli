@@ -27,6 +27,10 @@ final class MoodService: ObservableObject {
     /// Partner's mood across the last 7 days (oldest → newest) for the history bar.
     let partnerWeekMoods: [PartnerMood] = MockData.partnerWeekMoods
 
+    /// Current user's mood across the last 7 days — today's slot updates when the
+    /// user picks a new mood so their own meter reflects the change live.
+    @Published private(set) var myWeekMoods: [PartnerMood] = MockData.myWeekMoods
+
     func setMyMood(_ mood: PartnerMood, note: String? = nil) {
         if let i = moods.firstIndex(where: { $0.userId == currentUserId }) {
             moods[i].mood = mood
@@ -35,6 +39,8 @@ final class MoodService: ObservableObject {
         } else {
             moods.append(MoodStatus(userId: currentUserId, mood: mood, note: note))
         }
+        // Reflect today's mood in the user's own 7-day meter.
+        if !myWeekMoods.isEmpty { myWeekMoods[myWeekMoods.count - 1] = mood }
         if let updated = myMood { Task { await cloud.saveMood(updated) } }
         onDataChanged?()
     }

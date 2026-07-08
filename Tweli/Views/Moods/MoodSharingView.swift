@@ -2,8 +2,8 @@
 //  MoodSharingView.swift
 //  Tweli
 //
-//  Matches the design: a soft-accent partner card with a 7-day mood-history bar,
-//  then a "How are you feeling?" section of flowing text chips.
+//  Partner's mood meter + your own mood meter (both tap into a detail view),
+//  and a "How are you feeling?" chip picker that updates your meter live.
 //
 
 import SwiftUI
@@ -14,52 +14,73 @@ struct MoodSharingView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                partnerCard
+            VStack(alignment: .leading, spacing: 16) {
+                NavigationLink(value: MoodTarget.partner) {
+                    meter(title: "\(app.partner?.displayName ?? "Partner")'s mood",
+                          initials: app.partner?.initials ?? "A",
+                          background: .twAccentSoft, accent: .twAccent,
+                          mood: service.partnerMood?.mood,
+                          updated: service.partnerMood?.relativeLabel,
+                          week: service.partnerWeekMoods)
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink(value: MoodTarget.me) {
+                    meter(title: "Your mood",
+                          initials: app.currentUser.initials,
+                          background: .twAccent2Soft, accent: .twAccent2,
+                          mood: service.myMood?.mood,
+                          updated: service.myMood?.relativeLabel,
+                          week: service.myWeekMoods)
+                }
+                .buttonStyle(.plain)
+
                 feelingSection
             }
             .padding(TweliMetrics.screenPadding)
         }
         .background(Color.twBackground.ignoresSafeArea())
         .navigationTitle("Moods")
+        .navigationDestination(for: MoodTarget.self) { MoodDetailView(target: $0) }
     }
 
-    // MARK: - Partner mood card (soft accent + 7-day history bar)
+    // MARK: - Reusable mood meter card
 
-    private var partnerCard: some View {
+    private func meter(title: String, initials: String, background: Color, accent: Color,
+                       mood: PartnerMood?, updated: String?, week: [PartnerMood]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 12) {
-                Circle()
-                    .fill(Color.twAccent)
-                    .frame(width: 44, height: 44)
-                    .overlay(Text(app.partner?.initials ?? "A").font(.headline).foregroundStyle(.white))
+                Circle().fill(accent).frame(width: 44, height: 44)
+                    .overlay(Text(initials).font(.headline).foregroundStyle(.white))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("\(app.partner?.displayName ?? "Partner")'s mood").tweliEyebrow(.twAccent)
-                    Text(service.partnerMood?.mood.label ?? "—")
-                        .font(.system(size: 21, weight: .heavy))
-                        .foregroundStyle(.primary)
+                    Text(title).tweliEyebrow(accent)
+                    Text(mood?.label ?? "Not set")
+                        .font(.system(size: 21, weight: .heavy)).foregroundStyle(.primary)
                 }
                 Spacer()
-                Text(service.partnerMood?.relativeLabel ?? "")
-                    .font(.caption2).foregroundStyle(.tertiary)
+                Text(mood?.emoji ?? "💗").font(.title2)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    ForEach(Array(service.partnerWeekMoods.enumerated()), id: \.offset) { _, mood in
-                        Capsule().fill(mood.tint).frame(height: 5).frame(maxWidth: .infinity)
-                    }
+            HStack(spacing: 6) {
+                ForEach(Array(week.enumerated()), id: \.offset) { _, m in
+                    Capsule().fill(m.tint).frame(height: 5).frame(maxWidth: .infinity)
                 }
+            }
+            HStack {
                 Text("Last 7 days").font(.caption2).foregroundStyle(.tertiary)
+                Spacer()
+                Text(updated.map { "updated \($0)" } ?? "tap for detail")
+                    .font(.caption2).foregroundStyle(.tertiary)
             }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.twAccentSoft)
+        .background(background)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
-    // MARK: - "How are you feeling?" wrap chips
+    // MARK: - "How are you feeling?" chips
 
     private var feelingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
