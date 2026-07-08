@@ -24,6 +24,9 @@ final class MoodService: ObservableObject {
     var myMood: MoodStatus? { moods.first { $0.userId == currentUserId } }
     var partnerMood: MoodStatus? { moods.first { $0.userId == partnerId } }
 
+    /// Partner's mood across the last 7 days (oldest → newest) for the history bar.
+    let partnerWeekMoods: [PartnerMood] = MockData.partnerWeekMoods
+
     func setMyMood(_ mood: PartnerMood, note: String? = nil) {
         if let i = moods.firstIndex(where: { $0.userId == currentUserId }) {
             moods[i].mood = mood

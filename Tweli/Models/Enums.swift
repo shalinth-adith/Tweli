@@ -222,4 +222,13 @@ enum PartnerMood: String, Codable, CaseIterable, Identifiable {
         case .traveling: return "airplane"
         }
     }
+
+    /// Colour used for the 7-day mood-history bar on the Moods screen.
+    var tint: Color {
+        switch self {
+        case .missingYou, .needReassurance, .needCall: return .twAccent
+        case .excitedToMeet, .busyToday, .traveling: return .twAccent2
+        case .lowEnergy, .needSpace: return .twInkTertiary
+        }
+    }
 }

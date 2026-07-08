@@ -55,6 +55,16 @@
 		F03544632FFD70A500CB4849 /* TweliUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TweliUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D1D1D1D1D1D1D1D1D1D1000E /* Exceptions for "TweliWidget" folder in "TweliWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D1D1D1D1D1D1D1D1D1D10003 /* TweliWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D1D1D1D1D1D1D1D1D1D10002 /* TweliWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
@@ -80,17 +90,6 @@
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
-
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		D1D1D1D1D1D1D1D1D1D1000E /* Exceptions for "TweliWidget" folder in "TweliWidgetExtension" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-				TweliWidget.entitlements,
-			);
-			target = D1D1D1D1D1D1D1D1D1D10003 /* TweliWidgetExtension */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		D1D1D1D1D1D1D1D1D1D10005 /* Frameworks */ = {
@@ -131,6 +130,7 @@
 				F035445C2FFD70A500CB4849 /* TweliTests */,
 				F03544662FFD70A500CB4849 /* TweliUITests */,
 				F035444D2FFD70A500CB4849 /* Products */,
+				F035459C2FFD7ECB00CB4849 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -143,6 +143,14 @@
 				F03544632FFD70A500CB4849 /* TweliUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		F035459C2FFD7ECB00CB4849 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				D1D1D1D1D1D1D1D1D1D10002 /* TweliWidget */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -250,6 +258,9 @@
 				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					D1D1D1D1D1D1D1D1D1D10003 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
 					F035444B2FFD70A500CB4849 = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
@@ -260,9 +271,6 @@
 					F03544622FFD70A500CB4849 = {
 						CreatedOnToolsVersion = 26.4.1;
 						TestTargetID = F035444B2FFD70A500CB4849;
-					};
-					D1D1D1D1D1D1D1D1D1D10003 = {
-						CreatedOnToolsVersion = 26.4.1;
 					};
 				};
 			};
@@ -369,6 +377,55 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		D1D1D1D1D1D1D1D1D1D10008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TweliWidget/TweliWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 649T62WKAQ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TweliWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.adithyan.shalinth.Tweli.TweliWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D1D1D1D1D1D1D1D1D1D10009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TweliWidget/TweliWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 649T62WKAQ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TweliWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.adithyan.shalinth.Tweli.TweliWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		F035446B2FFD70A500CB4849 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -640,58 +697,18 @@
 			};
 			name = Release;
 		};
-		D1D1D1D1D1D1D1D1D1D10008 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = TweliWidget/TweliWidget.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 649T62WKAQ;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = TweliWidget/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = me.adithyan.shalinth.Tweli.TweliWidget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		D1D1D1D1D1D1D1D1D1D10009 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = TweliWidget/TweliWidget.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 649T62WKAQ;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = TweliWidget/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = me.adithyan.shalinth.Tweli.TweliWidget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		D1D1D1D1D1D1D1D1D1D10007 /* Build configuration list for PBXNativeTarget "TweliWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1D1D1D1D1D1D1D1D1D10008 /* Debug */,
+				D1D1D1D1D1D1D1D1D1D10009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		F03544472FFD70A500CB4849 /* Build configuration list for PBXProject "Tweli" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -724,15 +741,6 @@
 			buildConfigurations = (
 				F03544742FFD70A500CB4849 /* Debug */,
 				F03544752FFD70A500CB4849 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		D1D1D1D1D1D1D1D1D1D10007 /* Build configuration list for PBXNativeTarget "TweliWidgetExtension" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				D1D1D1D1D1D1D1D1D1D10008 /* Debug */,
-				D1D1D1D1D1D1D1D1D1D10009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

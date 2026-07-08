@@ -2,6 +2,9 @@
 //  MoodSharingView.swift
 //  Tweli
 //
+//  Matches the design: a soft-accent partner card with a 7-day mood-history bar,
+//  then a "How are you feeling?" section of flowing text chips.
+//
 
 import SwiftUI
 
@@ -9,14 +12,11 @@ struct MoodSharingView: View {
     @EnvironmentObject private var app: AppViewModel
     @EnvironmentObject private var service: MoodService
 
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
-
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 20) {
                 partnerCard
-                Text("How are you feeling?").font(.title3.weight(.bold)).padding(.top, 4)
-                moodGrid
+                feelingSection
             }
             .padding(TweliMetrics.screenPadding)
         }
@@ -24,48 +24,102 @@ struct MoodSharingView: View {
         .navigationTitle("Moods")
     }
 
+    // MARK: - Partner mood card (soft accent + 7-day history bar)
+
     private var partnerCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("\(app.partner?.displayName ?? "Partner") feels").tweliEyebrow(.white.opacity(0.85))
-            HStack {
-                Text(service.partnerMood?.mood.label ?? "—")
-                    .font(.system(size: 30, weight: .heavy))
-                Spacer()
-                Text(service.partnerMood?.mood.emoji ?? "💗").font(.system(size: 40))
-            }
-            .foregroundStyle(.white)
-            Text("updated \(service.partnerMood?.relativeLabel ?? "recently")")
-                .font(.caption).foregroundStyle(.white.opacity(0.85))
-        }
-        .padding(22)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(TweliGradient.hero)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-    }
-
-    private var moodGrid: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(PartnerMood.allCases) { mood in
-                Button { withAnimation(.snappy) { service.setMyMood(mood) } } label: {
-                    moodTile(mood)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(Color.twAccent)
+                    .frame(width: 44, height: 44)
+                    .overlay(Text(app.partner?.initials ?? "A").font(.headline).foregroundStyle(.white))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(app.partner?.displayName ?? "Partner")'s mood").tweliEyebrow(.twAccent)
+                    Text(service.partnerMood?.mood.label ?? "—")
+                        .font(.system(size: 21, weight: .heavy))
+                        .foregroundStyle(.primary)
                 }
-                .buttonStyle(.plain)
+                Spacer()
+                Text(service.partnerMood?.relativeLabel ?? "")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    ForEach(Array(service.partnerWeekMoods.enumerated()), id: \.offset) { _, mood in
+                        Capsule().fill(mood.tint).frame(height: 5).frame(maxWidth: .infinity)
+                    }
+                }
+                Text("Last 7 days").font(.caption2).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.twAccentSoft)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    // MARK: - "How are you feeling?" wrap chips
+
+    private var feelingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("How are you feeling?").font(.headline).foregroundStyle(.primary)
+            FlowLayout(spacing: 10) {
+                ForEach(PartnerMood.allCases) { mood in
+                    moodChip(mood)
+                }
             }
         }
     }
 
-    private func moodTile(_ mood: PartnerMood) -> some View {
-        let isSelected = service.myMood?.mood == mood
-        return HStack(spacing: 10) {
-            Text(mood.emoji).font(.title3)
-            Text(mood.label).font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? .white : Color.twInk)
-            Spacer()
-            if isSelected { Image(systemName: "checkmark").font(.caption.weight(.bold)).foregroundStyle(.white) }
+    private func moodChip(_ mood: PartnerMood) -> some View {
+        let selected = service.myMood?.mood == mood
+        return Button {
+            withAnimation(.snappy) { service.setMyMood(mood) }
+        } label: {
+            HStack(spacing: 5) {
+                if selected { Image(systemName: "checkmark").font(.caption2.weight(.bold)) }
+                Text(mood.label).font(.subheadline.weight(selected ? .bold : .semibold))
+            }
+            .padding(.horizontal, 16).padding(.vertical, 11)
+            .foregroundStyle(selected ? .white : Color.twInk)
+            .background(selected ? Color.twAccent : Color.twElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: selected ? Color.twAccent.opacity(0.35) : .black.opacity(0.05),
+                    radius: selected ? 8 : 4, x: 0, y: selected ? 4 : 1)
         }
-        .padding(.horizontal, 14).padding(.vertical, 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isSelected ? Color.twAccent : Color.twElevated)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .buttonStyle(.plain)
+    }
+}
+
+/// Lightweight wrapping layout (flex-wrap) for the mood chips.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 10
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                x = 0; y += rowHeight + spacing; rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: maxWidth == .infinity ? x : maxWidth, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX; y += rowHeight + spacing; rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
