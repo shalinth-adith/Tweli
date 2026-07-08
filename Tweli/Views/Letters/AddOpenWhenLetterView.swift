@@ -20,9 +20,15 @@ struct AddOpenWhenLetterView: View {
                         .lineLimit(4...8)
                 }
                 Section {
-                    Toggle("Lock until a date", isOn: $vm.useUnlockDate)
+                    Toggle("Lock until a date & time", isOn: $vm.useUnlockDate)
                     if vm.useUnlockDate {
-                        DatePicker("Unlock on", selection: $vm.unlockDate, displayedComponents: .date)
+                        DatePicker("Unlocks on", selection: $vm.unlockDate,
+                                   in: Date()...,
+                                   displayedComponents: [.date, .hourAndMinute])
+                    }
+                } footer: {
+                    if vm.useUnlockDate {
+                        Text("The letter stays sealed until this moment, then opens on its own.")
                     }
                 }
             }

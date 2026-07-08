@@ -11,6 +11,7 @@ struct OpenWhenLettersView: View {
     @EnvironmentObject private var service: OpenWhenLetterService
     @State private var showAdd = false
     @State private var reading: OpenWhenLetter?
+    @State private var lockedLetter: OpenWhenLetter?
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
@@ -54,12 +55,85 @@ struct OpenWhenLettersView: View {
         .navigationTitle("Open-When Letters")
         .sheet(isPresented: $showAdd) { AddOpenWhenLetterView() }
         .sheet(item: $reading) { letter in LetterReaderView(letter: letter) }
+        .sheet(item: $lockedLetter) { letter in LockedLetterSheet(letter: letter) }
     }
 
     private func open(_ letter: OpenWhenLetter) {
-        guard !letter.isLocked else { return }
+        // A sealed letter isn't readable yet — show when it unlocks instead.
+        if letter.isLocked { lockedLetter = letter; return }
         if !letter.isOpened { service.markOpened(letter) }
         reading = service.letters.first { $0.id == letter.id } ?? letter
+    }
+}
+
+/// Shown when a still-sealed letter is tapped — explains when it opens.
+private struct LockedLetterSheet: View {
+    let letter: OpenWhenLetter
+    @EnvironmentObject private var app: AppViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    private var sender: String {
+        letter.createdBy == app.currentUser.id ? "you" : (app.partner?.displayName ?? "your partner")
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            ZStack {
+                Circle().fill(Color.twAccentSoft).frame(width: 84, height: 84)
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(Color.twAccent)
+            }
+            .padding(.top, 8)
+
+            VStack(spacing: 6) {
+                Text(letter.title).font(.title3.weight(.bold)).multilineTextAlignment(.center)
+                Text("Sealed by \(sender)").font(.subheadline).foregroundStyle(.secondary)
+            }
+
+            if let date = letter.unlockDate {
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "calendar.badge.clock").font(.title3).foregroundStyle(Color.twAccent2)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Unlocks on").tweliEyebrow()
+                            Text(date.formatted(date: .long, time: .shortened))
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                        }
+                        Spacer()
+                    }
+                    Divider()
+                    Text(countdown(to: date))
+                        .font(.title3.weight(.heavy))
+                        .foregroundStyle(Color.twAccent)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity)
+                .background(Color.twElevated)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+
+            Text("This letter opens on its own the moment the time comes.")
+                .font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center)
+
+            Spacer(minLength: 0)
+            PrimaryButton(title: "Got it") { dismiss() }
+        }
+        .padding(24)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func countdown(to date: Date) -> String {
+        let secs = date.timeIntervalSinceNow
+        guard secs > 0 else { return "Ready to open" }
+        let days = Int(secs) / 86_400
+        let hours = (Int(secs) % 86_400) / 3600
+        let mins = (Int(secs) % 3600) / 60
+        func unit(_ n: Int, _ w: String) -> String { "\(n) \(w)\(n == 1 ? "" : "s")" }
+        if days > 0 { return "Opens in \(unit(days, "day"))" }
+        if hours > 0 { return "Opens in \(unit(hours, "hour"))" }
+        return "Opens in \(unit(max(1, mins), "minute"))"
     }
 }
 
