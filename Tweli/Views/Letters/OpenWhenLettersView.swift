@@ -63,32 +63,102 @@ struct OpenWhenLettersView: View {
     }
 }
 
-/// The reading sheet shown when a letter is opened.
+/// The opened-letter reading view (design 6a) — sender header, titled white
+/// message card, and Keep / Write-back actions.
 private struct LetterReaderView: View {
     let letter: OpenWhenLetter
+    @EnvironmentObject private var app: AppViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showWriteBack = false
+    @State private var kept = false
+
+    private var senderName: String {
+        letter.createdBy == app.currentUser.id ? "You" : (app.partner?.displayName ?? "Your partner")
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
-                    Image(systemName: "envelope.open.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(Color.twAccent)
-                        .padding(.top, 20)
-                    Text(letter.title).font(.title2.weight(.bold)).multilineTextAlignment(.center)
-                    Text(letter.message)
-                        .font(.body)
+                VStack(alignment: .leading, spacing: 0) {
+                    // Sender header
+                    HStack(spacing: 12) {
+                        Circle()
+                            .fill(LinearGradient(colors: [Color(red: 1, green: 0.42, blue: 0.54), .twAccent],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 44, height: 44)
+                            .overlay(Text(String(senderName.prefix(1))).font(.headline).foregroundStyle(.white))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(senderName).font(.headline).foregroundStyle(.primary)
+                            Text(letter.createdAt.formatted(.relative(presentation: .named)))
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.bottom, 8)
+
+                    Text(letter.title)
+                        .font(.title2.weight(.bold))
                         .foregroundStyle(.primary)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(4)
+                        .padding(.vertical, 14)
+
+                    // Message card
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(letter.message)
+                            .font(.system(size: 16))
+                            .foregroundStyle(.primary)
+                            .lineSpacing(5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("— \(senderName)")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(18)
+                    .background(Color.twElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 1)
                 }
-                .padding(24)
+                .padding(18)
             }
-            .background(Color.twBackground.ignoresSafeArea())
+            .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+            .safeAreaInset(edge: .bottom) { bottomActions }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: {
+                        Label("Letters", systemImage: "chevron.left").labelStyle(.titleAndIcon)
+                    }
+                }
             }
+            .sheet(isPresented: $showWriteBack) { AddOpenWhenLetterView() }
         }
+    }
+
+    private var bottomActions: some View {
+        HStack(spacing: 10) {
+            Button { kept.toggle() } label: {
+                Label(kept ? "Kept" : "Keep", systemImage: kept ? "bookmark.fill" : "bookmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .foregroundStyle(.primary)
+                    .background(Color(UIColor.tertiarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            Button { showWriteBack = true } label: {
+                Label("Write back", systemImage: "square.and.pencil")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .foregroundStyle(.white)
+                    .background(Color.twAccent)
+                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(.bar)
     }
 }
