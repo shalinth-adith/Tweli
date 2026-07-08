@@ -42,7 +42,7 @@ final class AppViewModel: ObservableObject {
     init() {
         coupleSpaceService = CoupleSpaceService(cloud: cloud)
         reminderService = ReminderService(notifications: notifications, cloud: cloud)
-        countdownService = CountdownService(cloud: cloud)
+        countdownService = CountdownService(cloud: cloud, notifications: notifications)
         virtualDateService = VirtualDateService(cloud: cloud, notifications: notifications)
         letterService = OpenWhenLetterService(cloud: cloud)
         moodService = MoodService(cloud: cloud)
@@ -109,6 +109,22 @@ final class AppViewModel: ObservableObject {
             nextDateTime: date.map { $0.date.formatted(date: .omitted, time: .shortened) } ?? "—"
         )
         widget.update(snapshot)
+    }
+
+    // MARK: - Notification bootstrap (runs exactly once)
+
+    private var didBootstrap = false
+
+    /// Schedules all reminder + countdown notifications once at startup. Kept OUT
+    /// of init because `@StateObject var app = AppViewModel()` evaluates the
+    /// initializer eagerly on every App/View creation — side effects in init would
+    /// schedule duplicates. Call this from a `.task` instead.
+    func bootstrapNotifications() {
+        guard !didBootstrap else { return }
+        didBootstrap = true
+        notifications.removeAllPending()   // clear stale (mock ids change per launch)
+        reminderService.scheduleAll()
+        countdownService.scheduleAll()
     }
 
     // MARK: - Notification permission

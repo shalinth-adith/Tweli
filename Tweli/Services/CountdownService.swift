@@ -13,10 +13,18 @@ final class CountdownService: ObservableObject {
 
     var onDataChanged: (() -> Void)?
     private let cloud: CloudKitService
+    private let notifications: ReminderNotificationService
 
-    init(cloud: CloudKitService) {
+    init(cloud: CloudKitService, notifications: ReminderNotificationService) {
         self.cloud = cloud
+        self.notifications = notifications
         self.countdowns = MockData.countdowns
+    }
+
+    /// Schedule "the day is here" alerts for all current countdowns. Called once
+    /// at startup (NOT from init — see AppViewModel bootstrap).
+    func scheduleAll() {
+        for c in countdowns { notifications.scheduleCountdown(c) }
     }
 
     /// The pinned (or soonest) countdown shown as the Home hero + widget.
@@ -30,6 +38,7 @@ final class CountdownService: ObservableObject {
 
     func add(_ countdown: CountdownItem) {
         countdowns.append(countdown)
+        notifications.scheduleCountdown(countdown)
         Task { await cloud.saveCountdown(countdown) }
         onDataChanged?()
     }
@@ -37,12 +46,14 @@ final class CountdownService: ObservableObject {
     func update(_ countdown: CountdownItem) {
         guard let i = countdowns.firstIndex(where: { $0.id == countdown.id }) else { return }
         countdowns[i] = countdown
+        notifications.rescheduleCountdown(countdown)
         Task { await cloud.saveCountdown(countdown) }
         onDataChanged?()
     }
 
     func delete(_ countdown: CountdownItem) {
         countdowns.removeAll { $0.id == countdown.id }
+        notifications.cancelCountdown(id: countdown.id)
         Task { await cloud.deleteCountdown(countdown) }
         onDataChanged?()
     }

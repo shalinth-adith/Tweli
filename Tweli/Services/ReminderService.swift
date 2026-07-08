@@ -27,7 +27,11 @@ final class ReminderService: ObservableObject {
         self.notifications = notifications
         self.cloud = cloud
         self.reminders = MockData.reminders
-        // Schedule any future reminders that came from mock/synced data.
+    }
+
+    /// Schedule local notifications for all current reminders. Called once at
+    /// startup (NOT from init — init must stay side-effect free, see AppViewModel).
+    func scheduleAll() {
         for r in reminders where !r.isCompleted { notifications.schedule(for: r) }
     }
 

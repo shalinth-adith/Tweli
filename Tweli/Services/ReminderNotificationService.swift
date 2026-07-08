@@ -51,8 +51,13 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
 
         let content = UNMutableNotificationContent()
         content.title = reminder.title
+        switch reminder.assignedTo {
+        case .both: content.subtitle = "For both of you 💞"
+        case .partner: content.subtitle = "A nudge for your partner 💗"
+        case .me: break
+        }
         content.body = reminder.note.isEmpty
-            ? "A small care reminder from your partner ❤️"
+            ? "A small care reminder ❤️"
             : reminder.note
         content.sound = .default
 
@@ -97,9 +102,53 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
         center.removePendingNotificationRequests(withIdentifiers: [id.uuidString])
     }
 
+    /// Clears all pending requests — used at startup before rescheduling so mock
+    /// data (whose ids change each launch) doesn't accumulate stale alerts.
+    func removeAllPending() {
+        center.removeAllPendingNotificationRequests()
+    }
+
     func reschedule(for reminder: ReminderItem) {
         cancel(id: reminder.id)
         schedule(for: reminder)
+    }
+
+    // MARK: - Countdowns (fire on the day the countdown reaches zero)
+
+    /// Schedules a one-off notification for the countdown's target day. If the
+    /// target has no specific time (midnight), it fires at 9:00 AM that day.
+    func scheduleCountdown(_ countdown: CountdownItem) {
+        let cal = Calendar.current
+        var comps = cal.dateComponents([.year, .month, .day], from: countdown.targetDate)
+        let time = cal.dateComponents([.hour, .minute], from: countdown.targetDate)
+        if (time.hour ?? 0) == 0 && (time.minute ?? 0) == 0 {
+            comps.hour = 9; comps.minute = 0            // friendly default
+        } else {
+            comps.hour = time.hour; comps.minute = time.minute
+        }
+        guard let fire = cal.date(from: comps), fire > Date() else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = countdown.title
+        content.body = countdown.arrivalMessage
+        content.sound = .default
+
+        let trigger = UNCalendarNotificationTrigger(
+            dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: fire),
+            repeats: false)
+        center.add(UNNotificationRequest(identifier: "countdown-\(countdown.id.uuidString)",
+                                         content: content, trigger: trigger)) { error in
+            if let error { print("[Notifications] countdown schedule failed: \(error.localizedDescription)") }
+        }
+    }
+
+    func cancelCountdown(id: UUID) {
+        center.removePendingNotificationRequests(withIdentifiers: ["countdown-\(id.uuidString)"])
+    }
+
+    func rescheduleCountdown(_ countdown: CountdownItem) {
+        cancelCountdown(id: countdown.id)
+        scheduleCountdown(countdown)
     }
 
     /// For debugging / verification — how many notifications are pending.

@@ -27,6 +27,10 @@ struct RootView: View {
             }
         }
         .task {
+            // Ask for notification permission up front, then schedule all reminder
+            // & countdown alerts once (mock data skips the onboarding request).
+            await app.notifications.requestAuthorization()
+            app.bootstrapNotifications()
             // Brief splash, then reveal the app.
             try? await Task.sleep(nanoseconds: 1_400_000_000)
             withAnimation(.easeInOut(duration: 0.45)) { app.showSplash = false }

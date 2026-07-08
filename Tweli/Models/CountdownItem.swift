@@ -30,4 +30,17 @@ struct CountdownItem: Identifiable, Codable, Hashable {
         let horizon = 90.0
         return min(1, max(0, (horizon - Double(daysRemaining)) / horizon))
     }
+
+    /// Warm notification body delivered on the day the countdown reaches zero.
+    var arrivalMessage: String {
+        switch category {
+        case .meeting: return "The day is finally here — you meet today! 💞"
+        case .birthday: return "It's the big day — happy birthday! 🎂"
+        case .anniversary: return "Happy anniversary! 💕"
+        case .trip: return "Trip day is here — time to go! ✈️"
+        case .call: return "It's time — your call is today 💗"
+        case .distanceEnds: return "The distance ends today. 🥹"
+        case .custom: return "Today's the day you've been counting down to 💕"
+        }
+    }
 }
