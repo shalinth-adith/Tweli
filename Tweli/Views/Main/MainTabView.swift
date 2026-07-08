@@ -9,6 +9,7 @@
 import SwiftUI
 
 struct MainTabView: View {
+    @EnvironmentObject private var app: AppViewModel
     @State private var selection = 0
 
     var body: some View {
@@ -27,6 +28,12 @@ struct MainTabView: View {
 
             NavigationStack { OpenWhenLettersView() }
                 .tabItem { Label("Letters", systemImage: "envelope.fill") }.tag(4)
+        }
+        .task {
+            // Ask for notification permission once the user is in the app, then
+            // schedule all reminder + countdown alerts (guarded to run once).
+            await app.notifications.requestAuthorization()
+            app.bootstrapNotifications()
         }
     }
 }

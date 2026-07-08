@@ -8,6 +8,7 @@ import UserNotifications
 
 struct SettingsView: View {
     @EnvironmentObject private var app: AppViewModel
+    @EnvironmentObject private var auth: AuthService
     @EnvironmentObject private var couple: CoupleSpaceService
     @EnvironmentObject private var notifications: ReminderNotificationService
 
@@ -44,9 +45,15 @@ struct SettingsView: View {
             }
 
             Section {
-                Button("Disconnect partner space", role: .destructive) {
+                Button("Leave shared space", role: .destructive) {
                     couple.disconnect()
                 }
+                Button("Sign out", role: .destructive) {
+                    couple.disconnect()
+                    auth.signOut()
+                }
+            } footer: {
+                Text(auth.displayName.isEmpty ? "" : "Signed in as \(auth.displayName) via Apple.")
             }
         }
         .navigationTitle("Settings")

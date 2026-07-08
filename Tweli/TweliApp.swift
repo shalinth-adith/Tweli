@@ -16,6 +16,7 @@ struct TweliApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(app)
+                .environmentObject(app.auth)
                 .environmentObject(app.coupleSpaceService)
                 .environmentObject(app.reminderService)
                 .environmentObject(app.countdownService)

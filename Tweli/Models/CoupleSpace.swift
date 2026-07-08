@@ -14,6 +14,9 @@ struct CoupleSpace: Identifiable, Codable, Hashable {
     var partnerIds: [UUID]
     var createdAt: Date = Date()
 
-    /// Human-friendly invite code prepared for the connect flow (CloudKit sharing later).
+    /// Short token embedded in the invite link (CloudKit CKShare URL later).
     var inviteCode: String = String(UUID().uuidString.prefix(6)).uppercased()
+
+    /// The shareable invite link a partner opens/pastes to join this space.
+    var inviteLink: String { "https://tweli.app/join/\(inviteCode)" }
 }

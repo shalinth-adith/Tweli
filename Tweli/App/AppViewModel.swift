@@ -27,6 +27,7 @@ final class AppViewModel: ObservableObject {
     @Published var showSplash: Bool = true
 
     // MARK: - Services (shared graph)
+    let auth = AuthService()
     let cloud = CloudKitService()
     let notifications = ReminderNotificationService()
     let widget = WidgetDataService()
@@ -72,6 +73,7 @@ final class AppViewModel: ObservableObject {
     // MARK: - Wiring
 
     private func wireIdentities() {
+        if auth.isSignedIn { coupleSpaceService.setDisplayName(auth.displayName) }
         let meId = coupleSpaceService.currentUser.id
         let partnerId = coupleSpaceService.partner?.id ?? MockData.anayaId
         reminderService.currentUserId = meId

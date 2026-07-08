@@ -11,6 +11,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var app: AppViewModel
+    @EnvironmentObject private var auth: AuthService
     @EnvironmentObject private var couple: CoupleSpaceService
 
     var body: some View {
@@ -18,20 +19,22 @@ struct RootView: View {
             if app.showSplash {
                 SplashView()
                     .transition(.opacity)
-            } else if couple.isConnected {
-                MainTabView()
+            } else if !auth.isSignedIn {
+                SignInView()
+                    .transition(.opacity)
+            } else if !couple.isConnected {
+                RoomSetupView()
                     .transition(.opacity)
             } else {
-                OnboardingView()
+                MainTabView()
                     .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.35), value: auth.isSignedIn)
+        .animation(.easeInOut(duration: 0.35), value: couple.isConnected)
         .task {
-            // Ask for notification permission up front, then schedule all reminder
-            // & countdown alerts once (mock data skips the onboarding request).
-            await app.notifications.requestAuthorization()
-            app.bootstrapNotifications()
-            // Brief splash, then reveal the app.
+            // Brief splash, then reveal the app. (Notification permission is asked
+            // once the user reaches the main app — see MainTabView.)
             try? await Task.sleep(nanoseconds: 1_400_000_000)
             withAnimation(.easeInOut(duration: 0.45)) { app.showSplash = false }
         }
