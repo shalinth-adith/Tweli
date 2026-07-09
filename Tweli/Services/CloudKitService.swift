@@ -111,15 +111,22 @@ final class CloudKitService: ObservableObject {
 
         let share = CKShare(rootRecord: root)
         share[CKShare.SystemFieldKey.title] = "Join \(title) on Tweli 💞" as CKRecordValue
-        share.publicPermission = .none
+        // Anyone who opens the link can join — so a plain link shared in WhatsApp
+        // etc. lets the partner in without being pre-invited by email/phone.
+        share.publicPermission = .readWrite
 
         let (saveResults, _) = try await privateDB.modifyRecords(saving: [root, share], deleting: [])
         for (_, result) in saveResults { if case .failure(let e) = result { log("share save partial failure: \(e)") } }
         setRole(.owner)
-        log("created share for “\(title)”")
 
-        if case .success(let rec)? = saveResults[share.recordID], let s = rec as? CKShare { return s }
-        return share
+        var saved = share
+        if case .success(let rec)? = saveResults[share.recordID], let s = rec as? CKShare { saved = s }
+        // The public URL is often nil on the just-saved object — re-fetch to get it.
+        if saved.url == nil, let refetched = try? await privateDB.record(for: saved.recordID) as? CKShare {
+            saved = refetched
+        }
+        log("created share for “\(title)” url=\(saved.url?.absoluteString ?? "nil")")
+        return saved
     }
 
     /// Accepts an incoming share (partner tapped the invite link).

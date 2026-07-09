@@ -181,7 +181,7 @@ struct CreateSpaceView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
 
                     Button {
-                        if cloudShare != nil { showCloudShare = true } else { showLinkShare = true }
+                        showLinkShare = true   // normal share sheet → WhatsApp / Messages / Copy
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "square.and.arrow.up")
@@ -207,10 +207,7 @@ struct CreateSpaceView: View {
                 // Primary path: create the space AND its shareable invite link.
                 PrimaryButton(title: preparingShare ? "Creating link…" : "Create space & invite link",
                               systemImage: preparingShare ? "hourglass" : "link") {
-                    Task {
-                        await createInviteLink()
-                        if cloudShare != nil { showCloudShare = true }   // offer to send it now
-                    }
+                    Task { await createInviteLink() }   // shows the copyable link inline
                 }
                 .disabled(preparingShare || spaceName.trimmingCharacters(in: .whitespaces).isEmpty)
 
