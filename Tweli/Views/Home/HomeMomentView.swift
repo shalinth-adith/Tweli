@@ -35,7 +35,7 @@ struct HomeMomentView: View {
     private var heroCarousel: some View {
         TabView(selection: $heroPage) {
             // Page 0 — partner's feeling (tap to send love back)
-            NavigationLink(value: HomeRoute.missingYou) {
+            Button { sendLove() } label: {
                 heroCard(
                     initials: app.partner?.initials ?? "A",
                     eyebrow: "\(app.partner?.displayName ?? "Partner") feels",
@@ -195,13 +195,19 @@ struct HomeMomentView: View {
 
     private var actionRow: some View {
         HStack(spacing: 10) {
-            NavigationLink(value: HomeRoute.missingYou) {
+            Button { sendLove() } label: {
                 labelPill("Send love", "heart.fill", filled: true)
             }.buttonStyle(.plain)
             Button { showAddDate = true } label: {
                 labelPill("Plan a date", "calendar", filled: false)
             }.buttonStyle(.plain)
         }
+    }
+
+    /// Consistent with the widget's "Send love" — jump to the Moods composer.
+    private func sendLove() {
+        app.requestedTab = 3
+        app.focusMoodMessage = true
     }
 
     private func labelPill(_ title: String, _ icon: String, filled: Bool) -> some View {
