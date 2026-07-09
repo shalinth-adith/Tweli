@@ -147,25 +147,11 @@ struct CreateSpaceView: View {
             Text("Invite your partner").tweliEyebrow()
             VStack(alignment: .leading, spacing: 12) {
                 if inviteLink.isEmpty {
-                    Text("Create a secure invite link, then share it in any app. When \(partnerName) taps it, Tweli opens and asks them to join.")
+                    Text("Tap “Create space & invite link” below to generate a secure link. Share it in any app — when \(partnerName) taps it, Tweli opens and asks them to join.")
                         .font(.footnote).foregroundStyle(.secondary)
 
-                    Button { Task { await createInviteLink() } } label: {
-                        HStack(spacing: 8) {
-                            if preparingShare { ProgressView().tint(.white) }
-                            else { Image(systemName: "link") }
-                            Text(preparingShare ? "Creating…" : "Create invite link").fontWeight(.semibold)
-                        }
-                        .font(.system(size: 16))
-                        .frame(maxWidth: .infinity).padding(14)
-                        .foregroundStyle(.white).background(Color.twAccent)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(preparingShare)
-
                     if let shareError {
-                        Text(shareError)
+                        Label(shareError, systemImage: "exclamationmark.triangle.fill")
                             .font(.caption).foregroundStyle(Color.twWarn)
                     }
                 } else {
@@ -217,13 +203,24 @@ struct CreateSpaceView: View {
 
     private var continueBar: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Circle().fill(Color.twWarn).frame(width: 8, height: 8)
-                Text("You can share the invite anytime from Settings.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            PrimaryButton(title: "Create & continue", systemImage: "heart.fill") {
-                couple.createSpace(title: spaceName)
+            if inviteLink.isEmpty {
+                // Primary path: create the space AND its shareable invite link.
+                PrimaryButton(title: preparingShare ? "Creating link…" : "Create space & invite link",
+                              systemImage: preparingShare ? "hourglass" : "link") {
+                    Task {
+                        await createInviteLink()
+                        if cloudShare != nil { showCloudShare = true }   // offer to send it now
+                    }
+                }
+                .disabled(preparingShare || spaceName.trimmingCharacters(in: .whitespaces).isEmpty)
+
+                Button("Skip — set up the link later") { couple.createSpace(title: spaceName) }
+                    .font(.footnote).foregroundStyle(.secondary)
+            } else {
+                // Link is ready — enter the shared space.
+                PrimaryButton(title: "Continue", systemImage: "heart.fill") {
+                    couple.createSpace(title: spaceName)
+                }
             }
         }
         .padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 8)
