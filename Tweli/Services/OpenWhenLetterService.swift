@@ -16,7 +16,11 @@ final class OpenWhenLetterService: ObservableObject {
 
     init(cloud: CloudKitService) {
         self.cloud = cloud
-        self.letters = MockData.letters
+#if DEBUG
+        self.letters = MockData.letters   // demo data for design/dev builds only
+#else
+        self.letters = []
+#endif
     }
 
     var unopened: [OpenWhenLetter] { letters.filter { !$0.isOpened } }

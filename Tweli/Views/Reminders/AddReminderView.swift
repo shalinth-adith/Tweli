@@ -58,7 +58,7 @@ struct AddReminderView: View {
     }
 
     private func save() {
-        let spaceId = app.coupleSpaceService.coupleSpace?.id ?? MockData.spaceId
+        guard let spaceId = app.coupleSpaceService.coupleSpace?.id else { return }
         let reminder = vm.build(createdBy: app.currentUser.id, coupleSpaceId: spaceId)
         service.add(reminder)
         dismiss()

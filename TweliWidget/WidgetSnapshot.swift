@@ -25,13 +25,13 @@ struct WidgetSnapshot: Codable, Equatable {
     static let placeholder = WidgetSnapshot(
         daysUntil: 21,
         countdownTitle: "Until we meet again",
-        partnerName: "Anaya",
+        partnerName: "Your partner",
         partnerMood: "Missing you",
         partnerMoodEmoji: "🥺",
-        nextDateTitle: "Movie night",
+        nextDateTitle: "Your next date",
         nextDateTime: "9:30 PM",
-        lastPingMessage: "Anaya misses you ❤️",
-        lastPingFrom: "Anaya",
+        lastPingMessage: "Missing you ❤️",
+        lastPingFrom: "Your partner",
         lastPingWhen: "2h ago"
     )
 

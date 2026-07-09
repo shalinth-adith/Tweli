@@ -16,7 +16,7 @@ final class ReminderService: ObservableObject {
     @Published private(set) var reminders: [ReminderItem]
 
     /// Set by AppViewModel — used to stamp `completedBy` on the current device.
-    var currentUserId: UUID = MockData.shalinthId
+    var currentUserId = UUID()
     /// AppViewModel hooks this to refresh the widget snapshot after any change.
     var onDataChanged: (() -> Void)?
 
@@ -26,7 +26,11 @@ final class ReminderService: ObservableObject {
     init(notifications: ReminderNotificationService, cloud: CloudKitService) {
         self.notifications = notifications
         self.cloud = cloud
-        self.reminders = MockData.reminders
+#if DEBUG
+        self.reminders = MockData.reminders   // demo data for design/dev builds only
+#else
+        self.reminders = []
+#endif
     }
 
     /// Schedule local notifications for all current reminders. Called once at

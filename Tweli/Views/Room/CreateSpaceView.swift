@@ -119,7 +119,7 @@ struct CreateSpaceView: View {
             Text("Space name").tweliEyebrow()
             HStack(spacing: 10) {
                 Image(systemName: "heart.fill").foregroundStyle(Color.twAccent)
-                TextField("Shalinth & Anaya", text: $spaceName)
+                TextField("Our space", text: $spaceName)
                     .font(.body)
             }
             .padding(15)

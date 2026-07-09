@@ -15,27 +15,67 @@ final class CoupleSpaceService: ObservableObject {
 
     private let cloud: CloudKitService
     private let setupKey = "tweli.roomSetupComplete"
+    private let userKey = "tweli.currentUser"
+    private let spaceKey = "tweli.coupleSpace"
+    private let partnerKey = "tweli.partner"
     private let defaults = UserDefaults.standard
 
     init(cloud: CloudKitService) {
         self.cloud = cloud
-        self.currentUser = MockData.shalinth
-        // Only enter the app if the user has already created/joined a space.
+
+        // Real, persisted identity — created once per install, name filled from
+        // the Apple account on sign in. Mock only seeds design/dev builds.
+        if let saved = Self.load(UserProfile.self, userKey, defaults) {
+            self.currentUser = saved
+        } else {
+#if DEBUG
+            self.currentUser = MockData.shalinth
+#else
+            self.currentUser = UserProfile(displayName: "", avatarEmoji: "💛")
+#endif
+        }
+
+        // Restore the real space + partner if setup was completed on this device.
         if defaults.bool(forKey: setupKey) {
-            self.coupleSpace = MockData.coupleSpace
-            self.partner = MockData.anaya
+            var space = Self.load(CoupleSpace.self, spaceKey, defaults)
+            var restoredPartner = Self.load(UserProfile.self, partnerKey, defaults)
+#if DEBUG
+            if space == nil { space = MockData.coupleSpace }       // populate dev builds
+            if restoredPartner == nil { restoredPartner = MockData.anaya }
+#endif
+            self.coupleSpace = space
+            self.partner = restoredPartner
         } else {
             self.coupleSpace = nil
             self.partner = nil
         }
+
+        save(currentUser, userKey)   // persist a freshly-generated identity
     }
 
     var isConnected: Bool { coupleSpace != nil }
 
-    /// Updates the signed-in user's display name (from AuthService).
+    /// Updates the signed-in user's display name (from AuthService) and persists it.
     func setDisplayName(_ name: String) {
-        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        currentUser.displayName = name
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        currentUser.displayName = trimmed
+        save(currentUser, userKey)
+    }
+
+    // MARK: - Persistence
+
+    private func save<T: Encodable>(_ value: T?, _ key: String) {
+        if let value, let data = try? JSONEncoder().encode(value) {
+            defaults.set(data, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private static func load<T: Decodable>(_ type: T.Type, _ key: String, _ defaults: UserDefaults) -> T? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(type, from: data)
     }
 
     /// Create a brand-new couple space (owner). No partner yet — the space waits
@@ -45,6 +85,8 @@ final class CoupleSpaceService: ObservableObject {
                                 createdBy: currentUser.id, partnerIds: [currentUser.id])
         coupleSpace = space
         partner = nil
+        save(space, spaceKey)
+        save(UserProfile?.none, partnerKey)
         completeSetup()
         Task { await cloud.createCoupleSpace(space) }
     }
@@ -52,8 +94,11 @@ final class CoupleSpaceService: ObservableObject {
     /// Connect after accepting a partner's CloudKit share (participant role). The
     /// partner is the person who created & shared the space (from their identity).
     func connectAsParticipant(title: String, partnerName: String) {
-        coupleSpace = CoupleSpace(title: title, createdBy: UUID(), partnerIds: [currentUser.id])
+        let space = CoupleSpace(title: title, createdBy: UUID(), partnerIds: [currentUser.id])
+        coupleSpace = space
         partner = UserProfile(displayName: partnerName, avatarEmoji: "💛")
+        save(space, spaceKey)
+        save(partner, partnerKey)
         completeSetup()
     }
 
@@ -61,6 +106,7 @@ final class CoupleSpaceService: ObservableObject {
     func setPartnerJoined(name: String) {
         guard partner == nil else { return }
         partner = UserProfile(displayName: name, avatarEmoji: "💛")
+        save(partner, partnerKey)
     }
 
     /// True while the owner is connected but nobody has accepted the invite yet.
@@ -75,5 +121,7 @@ final class CoupleSpaceService: ObservableObject {
         defaults.set(false, forKey: setupKey)
         coupleSpace = nil
         partner = nil
+        save(CoupleSpace?.none, spaceKey)
+        save(UserProfile?.none, partnerKey)
     }
 }

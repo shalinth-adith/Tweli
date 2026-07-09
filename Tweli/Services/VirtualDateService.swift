@@ -18,7 +18,11 @@ final class VirtualDateService: ObservableObject {
     init(cloud: CloudKitService, notifications: ReminderNotificationService) {
         self.cloud = cloud
         self.notifications = notifications
-        self.dates = MockData.virtualDates
+#if DEBUG
+        self.dates = MockData.virtualDates   // demo data for design/dev builds only
+#else
+        self.dates = []
+#endif
     }
 
     /// The next planned date — Home dashboard + widget.

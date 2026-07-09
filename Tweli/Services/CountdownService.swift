@@ -18,7 +18,11 @@ final class CountdownService: ObservableObject {
     init(cloud: CloudKitService, notifications: ReminderNotificationService) {
         self.cloud = cloud
         self.notifications = notifications
-        self.countdowns = MockData.countdowns
+#if DEBUG
+        self.countdowns = MockData.countdowns   // demo data for design/dev builds only
+#else
+        self.countdowns = []
+#endif
     }
 
     /// Schedule "the day is here" alerts for all current countdowns. Called once

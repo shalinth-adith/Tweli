@@ -11,15 +11,19 @@ final class MissingYouService: ObservableObject {
 
     @Published private(set) var pings: [MissingYouPing]
 
-    var currentUserId: UUID = MockData.shalinthId
-    var partnerId: UUID = MockData.anayaId
-    var coupleSpaceId: UUID = MockData.spaceId
+    var currentUserId = UUID()   // set by AppViewModel.wireIdentities()
+    var partnerId = UUID()
+    var coupleSpaceId = UUID()
     var onDataChanged: (() -> Void)?
     private let cloud: CloudKitService
 
     init(cloud: CloudKitService) {
         self.cloud = cloud
-        self.pings = MockData.pings
+#if DEBUG
+        self.pings = MockData.pings   // demo data for design/dev builds only
+#else
+        self.pings = []
+#endif
     }
 
     /// Most recent first, for the history list.

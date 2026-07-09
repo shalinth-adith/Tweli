@@ -21,6 +21,10 @@ final class AppViewModel: ObservableObject {
     /// The share is only accepted once the user taps Join (see `confirmPendingJoin`).
     @Published var pendingInvite: PendingInvite?
 
+    /// Sentinel partner id used before anyone has joined — matches no real record.
+    static let noPartnerId = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    private var cancellables = Set<AnyCancellable>()
+
     // MARK: - Services (shared graph)
     let auth = AuthService()
     let cloud = CloudKitService()
@@ -47,6 +51,15 @@ final class AppViewModel: ObservableObject {
         wireIdentities()
         wireWidgetRefresh()
         refreshWidget()
+
+        // When the user signs in with Apple, apply their real name + re-wire ids.
+        auth.$isSignedIn
+            .sink { [weak self] signedIn in
+                guard let self, signedIn else { return }
+                self.coupleSpaceService.setDisplayName(self.auth.displayName)
+                self.wireIdentities()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Convenience
@@ -70,7 +83,8 @@ final class AppViewModel: ObservableObject {
     private func wireIdentities() {
         if auth.isSignedIn { coupleSpaceService.setDisplayName(auth.displayName) }
         let meId = coupleSpaceService.currentUser.id
-        let partnerId = coupleSpaceService.partner?.id ?? MockData.anayaId
+        // No partner yet → a sentinel id that matches no real record (empty data).
+        let partnerId = coupleSpaceService.partner?.id ?? Self.noPartnerId
         reminderService.currentUserId = meId
         moodService.currentUserId = meId
         moodService.partnerId = partnerId

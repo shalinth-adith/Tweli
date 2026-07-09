@@ -44,7 +44,7 @@ struct AddCountdownView: View {
     }
 
     private func save() {
-        let spaceId = app.coupleSpaceService.coupleSpace?.id ?? MockData.spaceId
+        guard let spaceId = app.coupleSpaceService.coupleSpace?.id else { return }
         service.add(vm.build(createdBy: app.currentUser.id, coupleSpaceId: spaceId))
         dismiss()
     }

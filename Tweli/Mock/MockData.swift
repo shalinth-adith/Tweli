@@ -8,6 +8,9 @@
 
 import Foundation
 
+// Demo/sample data for design + dev builds and SwiftUI previews ONLY.
+// Compiled out of Release/TestFlight builds so no sample content ships.
+#if DEBUG
 enum MockData {
 
     // MARK: - Stable identities (so references line up across models)
@@ -152,3 +155,4 @@ enum MockData {
         ]
     }
 }
+#endif
