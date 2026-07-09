@@ -37,4 +37,11 @@ final class MissingYouService: ObservableObject {
         Task { await cloud.sendPing(ping) }
         onDataChanged?()
     }
+
+    func mergeRemote(_ items: [MissingYouPing], deletedIDs: [UUID]) {
+        for item in items where !pings.contains(where: { $0.id == item.id }) {
+            pings.append(item)
+        }
+        if !deletedIDs.isEmpty { pings.removeAll { deletedIDs.contains($0.id) } }
+    }
 }

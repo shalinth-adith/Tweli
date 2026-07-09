@@ -10,12 +10,14 @@ import UIKit
 
 struct JoinSpaceView: View {
     @EnvironmentObject private var app: AppViewModel
-    @EnvironmentObject private var couple: CoupleSpaceService
 
     @State private var link = ""
     @FocusState private var focused: Bool
 
-    private var isValid: Bool { CoupleSpaceService.isValidInvite(link) }
+    /// A CloudKit share can only be accepted by opening its link (the OS then
+    /// hands the app the share) — so we validate that this is a real URL.
+    private var trimmedLink: String { link.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var isValid: Bool { URL(string: trimmedLink)?.scheme?.hasPrefix("http") == true }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,19 +70,10 @@ struct JoinSpaceView: View {
 
     private var matchedPreview: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(LinearGradient(colors: [Color(red: 1, green: 0.42, blue: 0.54), .twAccent],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 44, height: 44)
-                .overlay(Text(app.partner?.initials ?? "A").font(.headline).foregroundStyle(.white))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(app.partner?.displayName ?? "Anaya")'s space")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                Text("You'll join “\(couple.coupleSpace?.title ?? "Shalinth & Anaya")”")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(Color.twSuccess)
+            Image(systemName: "checkmark.seal.fill").font(.title3).foregroundStyle(Color.twSuccess)
+            Text("Looks like a valid invite. Tap Join to open it and confirm.")
+                .font(.footnote).foregroundStyle(.secondary)
+            Spacer(minLength: 0)
         }
         .padding(16)
         .background(Color(UIColor.secondarySystemGroupedBackground))
@@ -89,7 +82,9 @@ struct JoinSpaceView: View {
 
     private var joinBar: some View {
         PrimaryButton(title: "Join space", systemImage: "heart.fill") {
-            Task { await couple.joinSpace(link: link) }
+            // Opening the CloudKit share link routes it through the OS, which hands
+            // the app the share metadata → the confirm-join sheet appears.
+            if let url = URL(string: trimmedLink) { UIApplication.shared.open(url) }
         }
         .disabled(!isValid)
         .opacity(isValid ? 1 : 0.5)

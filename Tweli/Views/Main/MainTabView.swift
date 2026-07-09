@@ -34,6 +34,7 @@ struct MainTabView: View {
             // schedule all reminder + countdown alerts (guarded to run once).
             await app.notifications.requestAuthorization()
             app.bootstrapNotifications()
+            app.syncNow()   // pull any CloudKit changes for the couple space
         }
     }
 }

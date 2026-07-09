@@ -9,22 +9,17 @@
 
 import SwiftUI
 import Combine
-
-/// The two Home dashboard directions from the design (toggle in the Home header).
-enum HomeStyle: String, CaseIterable, Identifiable {
-    case overview   // 1a — data-forward
-    case moment     // 1b — one feeling at a time
-    var id: String { rawValue }
-    var label: String { self == .overview ? "Overview" : "Moment" }
-    var sfSymbol: String { self == .overview ? "square.grid.2x2.fill" : "heart.text.square.fill" }
-}
+import CloudKit
 
 @MainActor
 final class AppViewModel: ObservableObject {
 
     // MARK: - App-level UI state
-    @Published var homeStyle: HomeStyle = .overview
     @Published var showSplash: Bool = true
+
+    /// Set when the partner opens an invite link — drives the "confirm join" sheet.
+    /// The share is only accepted once the user taps Join (see `confirmPendingJoin`).
+    @Published var pendingInvite: PendingInvite?
 
     // MARK: - Services (shared graph)
     let auth = AuthService()
@@ -135,6 +130,58 @@ final class AppViewModel: ObservableObject {
         reminderService.scheduleAll()
         countdownService.scheduleAll()
     }
+
+    // MARK: - CloudKit sync
+
+    /// Pull remote changes into the local services and register for push.
+    /// Offline-first: the local store stays authoritative if CloudKit is off.
+    func syncNow() {
+        Task {
+            await cloud.refreshAccountStatus()
+            guard cloud.role != .none else { return }
+            let changes = await cloud.fetchChanges()
+            let dec = JSONDecoder()
+            func decode<T: Decodable>(_ type: String) -> [T] {
+                (changes.payloadsByType[type] ?? []).compactMap { try? dec.decode(T.self, from: $0) }
+            }
+            reminderService.mergeRemote(decode(CloudKitService.RType.reminder), deletedIDs: changes.deletedIDs)
+            countdownService.mergeRemote(decode(CloudKitService.RType.countdown), deletedIDs: changes.deletedIDs)
+            letterService.mergeRemote(decode(CloudKitService.RType.letter), deletedIDs: changes.deletedIDs)
+            virtualDateService.mergeRemote(decode(CloudKitService.RType.virtualDate), deletedIDs: changes.deletedIDs)
+            moodService.mergeRemote(decode(CloudKitService.RType.mood), deletedIDs: changes.deletedIDs)
+            missingYouService.mergeRemote(decode(CloudKitService.RType.ping), deletedIDs: changes.deletedIDs)
+            await cloud.registerSubscription()
+            // Owner side: reflect it once the invited person accepts the share.
+            if cloud.role == .owner, coupleSpaceService.awaitingPartner,
+               let name = await cloud.acceptedParticipantName() {
+                coupleSpaceService.setPartnerJoined(name: name)
+            }
+            refreshWidget()
+        }
+    }
+
+    /// Partner tapped an invite link — the OS hands us the share metadata. We do
+    /// NOT accept yet; we surface a confirmation sheet and only join on "Join".
+    func handleAcceptedShare(_ metadata: CKShare.Metadata) async {
+        pendingInvite = PendingInvite(metadata: metadata)
+    }
+
+    /// User confirmed the invite — accept the share, become a participant, sync.
+    func confirmPendingJoin() async {
+        guard let invite = pendingInvite else { return }
+        do {
+            try await cloud.acceptShare(invite.metadata)
+            coupleSpaceService.connectAsParticipant(title: invite.spaceTitle,
+                                                    partnerName: invite.inviterName)
+            pendingInvite = nil
+            syncNow()
+        } catch {
+            print("[CloudKit] accept share failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// User dismissed the invite without joining.
+    func cancelPendingJoin() { pendingInvite = nil }
 
     // MARK: - Notification permission
 

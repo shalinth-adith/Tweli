@@ -27,9 +27,6 @@ struct SettingsView: View {
             }
 
             Section("Personalization") {
-                Picker("Home layout", selection: $app.homeStyle) {
-                    ForEach(HomeStyle.allCases) { Text($0.label).tag($0) }
-                }
                 row("app.badge.fill", "Reminder tone", "Default", .twAccent2)
             }
 

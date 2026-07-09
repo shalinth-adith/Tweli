@@ -57,6 +57,14 @@ final class VirtualDateService: ObservableObject {
         onDataChanged?()
     }
 
+    func mergeRemote(_ items: [VirtualDateItem], deletedIDs: [UUID]) {
+        for item in items {
+            if let i = dates.firstIndex(where: { $0.id == item.id }) { dates[i] = item }
+            else { dates.append(item) }
+        }
+        if !deletedIDs.isEmpty { dates.removeAll { deletedIDs.contains($0.id) } }
+    }
+
     private func scheduleReminder(for date: VirtualDateItem) {
         // Nudge 30 minutes before the date.
         let fireDate = date.date.addingTimeInterval(-30 * 60)

@@ -129,6 +129,15 @@ final class ReminderService: ObservableObject {
             .min { $0.reminderDate < $1.reminderDate }
     }
 
+    /// Merge records that arrived from CloudKit (upsert by id, then apply deletes).
+    func mergeRemote(_ items: [ReminderItem], deletedIDs: [UUID]) {
+        for item in items {
+            if let i = reminders.firstIndex(where: { $0.id == item.id }) { reminders[i] = item }
+            else { reminders.append(item) }
+        }
+        if !deletedIDs.isEmpty { reminders.removeAll { deletedIDs.contains($0.id) } }
+    }
+
     /// Today's completion progress (0…1) for the Home "today progress" ring.
     var todayProgress: Double {
         let items = today

@@ -3,8 +3,8 @@
 //  Tweli
 //
 //  Home dashboard container. Hosts the custom header (greeting + avatar/gear),
-//  the Overview/Moment style toggle, and the navigation routes for the screens
-//  the design reaches from Home (Countdown, Missing You, Partner, Settings).
+//  the "Moment" dashboard, and the navigation routes for the screens the design
+//  reaches from Home (Countdown, Missing You, Partner, Settings).
 //
 
 import SwiftUI
@@ -19,12 +19,8 @@ struct HomeView: View {
         ScrollView {
             VStack(spacing: 18) {
                 header
-                styleToggle
-                if app.homeStyle == .overview {
-                    HomeOverviewView()
-                } else {
-                    HomeMomentView()
-                }
+                if couple.awaitingPartner { waitingBanner }
+                HomeMomentView()
             }
             .padding(.horizontal, TweliMetrics.screenPadding)
             .padding(.top, 8)
@@ -79,29 +75,29 @@ struct HomeView: View {
             )
     }
 
-    // MARK: - Style toggle (Overview / Moment)
+    // MARK: - Waiting for partner
 
-    private var styleToggle: some View {
-        HStack(spacing: 4) {
-            ForEach(HomeStyle.allCases) { style in
-                Button {
-                    withAnimation(.snappy) { app.homeStyle = style }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: style.sfSymbol).font(.caption)
-                        Text(style.label).font(.subheadline.weight(.semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .foregroundStyle(app.homeStyle == style ? .white : Color.twInkSecondary)
-                    .background(app.homeStyle == style ? Color.twAccent : Color.clear)
-                    .clipShape(Capsule())
+    /// Shown to the space owner until the invited person accepts the share.
+    private var waitingBanner: some View {
+        NavigationLink(value: HomeRoute.partner) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle().fill(Color.twAccent2.opacity(0.15)).frame(width: 40, height: 40)
+                    Image(systemName: "hourglass").foregroundStyle(Color.twAccent2)
                 }
-                .buttonStyle(.plain)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Waiting for your partner to join")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    Text("They'll appear here once they open your invite.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
             }
+            .padding(14)
+            .background(Color.twElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .padding(4)
-        .background(Color.twElevated)
-        .clipShape(Capsule())
+        .buttonStyle(.plain)
     }
 }

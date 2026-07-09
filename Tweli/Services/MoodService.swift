@@ -44,4 +44,12 @@ final class MoodService: ObservableObject {
         if let updated = myMood { Task { await cloud.saveMood(updated) } }
         onDataChanged?()
     }
+
+    func mergeRemote(_ items: [MoodStatus], deletedIDs: [UUID]) {
+        for item in items {
+            if let i = moods.firstIndex(where: { $0.id == item.id }) { moods[i] = item }
+            else { moods.append(item) }
+        }
+        if !deletedIDs.isEmpty { moods.removeAll { deletedIDs.contains($0.id) } }
+    }
 }

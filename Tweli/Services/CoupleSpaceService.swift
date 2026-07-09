@@ -38,48 +38,33 @@ final class CoupleSpaceService: ObservableObject {
         currentUser.displayName = name
     }
 
-    /// A fresh invite link to show on the Create screen before the space exists.
-    func makeDraftInviteLink() -> String {
-        let code = String(UUID().uuidString.prefix(6)).uppercased()
-        return "https://tweli.app/join/\(code)"
-    }
-
-    /// Create a brand-new couple space and finish room setup.
-    /// Mock: the partner (Anaya) is connected so the app is fully populated;
-    /// with CloudKit the space would wait for a real join via the invite link.
+    /// Create a brand-new couple space (owner). No partner yet — the space waits
+    /// for the invited person to accept the share (see `setPartnerJoined`).
     func createSpace(title: String) {
         let space = CoupleSpace(title: title.isEmpty ? "Our Space" : title,
                                 createdBy: currentUser.id, partnerIds: [currentUser.id])
         coupleSpace = space
-        partner = MockData.anaya
+        partner = nil
         completeSetup()
         Task { await cloud.createCoupleSpace(space) }
     }
 
-    /// Join an existing space from an invite link.
-    func joinSpace(link: String) async {
-        let code = Self.inviteCode(from: link)
-        if let joined = await cloud.joinCoupleSpace(code: code) {
-            coupleSpace = joined
-        } else {
-            // TODO: CloudKit — real join. For now, mock a connected space.
-            coupleSpace = MockData.coupleSpace
-            partner = MockData.anaya
-        }
+    /// Connect after accepting a partner's CloudKit share (participant role). The
+    /// partner is the person who created & shared the space (from their identity).
+    func connectAsParticipant(title: String, partnerName: String) {
+        coupleSpace = CoupleSpace(title: title, createdBy: UUID(), partnerIds: [currentUser.id])
+        partner = UserProfile(displayName: partnerName, avatarEmoji: "💛")
         completeSetup()
     }
 
-    /// Extracts the invite token from a pasted link or bare code.
-    static func inviteCode(from link: String) -> String {
-        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let last = trimmed.split(whereSeparator: { $0 == "/" }).last { return String(last) }
-        return trimmed
+    /// Owner side: called once CloudKit reports the invited person has accepted.
+    func setPartnerJoined(name: String) {
+        guard partner == nil else { return }
+        partner = UserProfile(displayName: name, avatarEmoji: "💛")
     }
 
-    /// A pasted string looks like a valid invite (link or code) once it has a token.
-    static func isValidInvite(_ link: String) -> Bool {
-        !inviteCode(from: link).isEmpty && link.count >= 4
-    }
+    /// True while the owner is connected but nobody has accepted the invite yet.
+    var awaitingPartner: Bool { coupleSpace != nil && partner == nil }
 
     private func completeSetup() {
         defaults.set(true, forKey: setupKey)

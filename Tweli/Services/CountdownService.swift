@@ -58,6 +58,14 @@ final class CountdownService: ObservableObject {
         onDataChanged?()
     }
 
+    func mergeRemote(_ items: [CountdownItem], deletedIDs: [UUID]) {
+        for item in items {
+            if let i = countdowns.firstIndex(where: { $0.id == item.id }) { countdowns[i] = item }
+            else { countdowns.append(item) }
+        }
+        if !deletedIDs.isEmpty { countdowns.removeAll { deletedIDs.contains($0.id) } }
+    }
+
     func togglePin(_ countdown: CountdownItem) {
         for i in countdowns.indices { countdowns[i].isPinned = false }
         if let i = countdowns.firstIndex(where: { $0.id == countdown.id }) {

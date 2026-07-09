@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UIKit
+import CloudKit
 
 struct CreateSpaceView: View {
     @EnvironmentObject private var app: AppViewModel
@@ -14,8 +15,13 @@ struct CreateSpaceView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var spaceName = ""
-    @State private var inviteLink = ""
+    @State private var inviteLink = ""          // the REAL CKShare URL, once created
     @State private var copied = false
+    @State private var cloudShare: CKShare?
+    @State private var showCloudShare = false
+    @State private var showLinkShare = false
+    @State private var preparingShare = false
+    @State private var shareError: String?
 
     private var partnerName: String { app.partner?.displayName ?? "your partner" }
 
@@ -37,7 +43,37 @@ struct CreateSpaceView: View {
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Create space")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { if inviteLink.isEmpty { inviteLink = couple.makeDraftInviteLink() } }
+        .sheet(isPresented: $showCloudShare) {
+            if let cloudShare {
+                CloudSharingSheet(share: cloudShare, container: app.cloud.container)
+            }
+        }
+        .sheet(isPresented: $showLinkShare) { ActivityView(items: [inviteLink]) }
+    }
+
+    /// Creates the real CloudKit share and captures its public URL — a proper
+    /// https://www.icloud.com/share/… link that opens Tweli when tapped. Needs an
+    /// iCloud account (real device); on the simulator this reports why it can't.
+    private func createInviteLink() async {
+        preparingShare = true
+        shareError = nil
+        defer { preparingShare = false }
+        await app.cloud.refreshAccountStatus()
+        guard app.cloud.accountAvailable else {
+            shareError = "Sign in to iCloud on this device to create an invite link."
+            return
+        }
+        do {
+            let share = try await app.cloud.createShare(title: spaceName.isEmpty ? "Our Space" : spaceName)
+            cloudShare = share
+            if let url = share.url {
+                inviteLink = url.absoluteString
+            } else {
+                shareError = "Couldn't get the link URL. Try 'Share invite' to send it."
+            }
+        } catch {
+            shareError = "Couldn't create the invite link: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Pairing hero (you --- invite)
@@ -96,38 +132,67 @@ struct CreateSpaceView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Invite your partner").tweliEyebrow()
             VStack(alignment: .leading, spacing: 12) {
-                Text("Share this link so they can join your space.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                if inviteLink.isEmpty {
+                    Text("Create a secure invite link, then share it in any app. When \(partnerName) taps it, Tweli opens and asks them to join.")
+                        .font(.footnote).foregroundStyle(.secondary)
 
-                HStack(spacing: 10) {
-                    Text(inviteLink)
-                        .font(.footnote.weight(.medium))
-                        .lineLimit(1).truncationMode(.middle)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Button {
-                        UIPasteboard.general.string = inviteLink
-                        withAnimation { copied = true }
-                        Task { try? await Task.sleep(nanoseconds: 1_500_000_000); withAnimation { copied = false } }
-                    } label: {
-                        Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .foregroundStyle(Color.twAccent)
-                            .background(Color.twAccentSoft, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(13)
-                .background(Color(UIColor.systemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-
-                ShareLink(item: URL(string: inviteLink) ?? URL(string: "https://tweli.app")!,
-                          message: Text("Join our space on Tweli 💞")) {
-                    Label("Share invite", systemImage: "square.and.arrow.up")
-                        .font(.system(size: 16, weight: .semibold))
+                    Button { Task { await createInviteLink() } } label: {
+                        HStack(spacing: 8) {
+                            if preparingShare { ProgressView().tint(.white) }
+                            else { Image(systemName: "link") }
+                            Text(preparingShare ? "Creating…" : "Create invite link").fontWeight(.semibold)
+                        }
+                        .font(.system(size: 16))
                         .frame(maxWidth: .infinity).padding(14)
                         .foregroundStyle(.white).background(Color.twAccent)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(preparingShare)
+
+                    if let shareError {
+                        Text(shareError)
+                            .font(.caption).foregroundStyle(Color.twWarn)
+                    }
+                } else {
+                    Text("Share this link so \(partnerName) can join your space.")
+                        .font(.footnote).foregroundStyle(.secondary)
+
+                    HStack(spacing: 10) {
+                        Text(inviteLink)
+                            .font(.footnote.weight(.medium))
+                            .lineLimit(1).truncationMode(.middle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button {
+                            UIPasteboard.general.string = inviteLink
+                            withAnimation { copied = true }
+                            Task { try? await Task.sleep(nanoseconds: 1_500_000_000); withAnimation { copied = false } }
+                        } label: {
+                            Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .foregroundStyle(Color.twAccent)
+                                .background(Color.twAccentSoft, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(13)
+                    .background(Color(UIColor.systemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+                    Button {
+                        if cloudShare != nil { showCloudShare = true } else { showLinkShare = true }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Share invite").fontWeight(.semibold)
+                        }
+                        .font(.system(size: 16))
+                        .frame(maxWidth: .infinity).padding(14)
+                        .foregroundStyle(.white).background(Color.twAccent)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(16)

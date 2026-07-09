@@ -41,4 +41,12 @@ final class OpenWhenLetterService: ObservableObject {
         letters.removeAll { $0.id == letter.id }
         onDataChanged?()
     }
+
+    func mergeRemote(_ items: [OpenWhenLetter], deletedIDs: [UUID]) {
+        for item in items {
+            if let i = letters.firstIndex(where: { $0.id == item.id }) { letters[i] = item }
+            else { letters.append(item) }
+        }
+        if !deletedIDs.isEmpty { letters.removeAll { deletedIDs.contains($0.id) } }
+    }
 }

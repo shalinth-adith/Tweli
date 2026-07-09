@@ -32,6 +32,10 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.35), value: auth.isSignedIn)
         .animation(.easeInOut(duration: 0.35), value: couple.isConnected)
+        .sheet(item: $app.pendingInvite) { invite in
+            JoinConfirmView(invite: invite)
+                .environmentObject(app)
+        }
         .task {
             // Brief splash, then reveal the app. (Notification permission is asked
             // once the user reaches the main app — see MainTabView.)
