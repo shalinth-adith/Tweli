@@ -37,10 +37,11 @@ struct RootView: View {
                 .environmentObject(app)
         }
         .task {
-            // Brief splash, then reveal the app. (Notification permission is asked
-            // once the user reaches the main app — see MainTabView.)
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
-            withAnimation(.easeInOut(duration: 0.45)) { app.showSplash = false }
+            // Let the entry animation play (dots + thread + wordmark land ~2.4s),
+            // then reveal the app. (Notification permission is asked once the user
+            // reaches the main app — see MainTabView.)
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            withAnimation(.easeInOut(duration: 0.5)) { app.showSplash = false }
         }
     }
 }
