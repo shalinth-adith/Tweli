@@ -17,6 +17,11 @@ struct WidgetSnapshot: Codable, Equatable {
     var partnerMoodEmoji: String
     var nextDateTitle: String
     var nextDateTime: String
+    // Partner's mood note — the custom message that sits on the "Two of us" widget.
+    var partnerMoodNote: String = ""
+    // Reunion progress 0…1 for the widget's S———A thread (heart position).
+    var countdownProgress: Double = 0
+    var userInitial: String = "You"   // left dot on the "Two of us" thread
     // Latest missing-you ping (reflects a "send love" tap in the widget).
     var lastPingMessage: String = "Send a little love"
     var lastPingFrom: String = "—"
@@ -30,6 +35,8 @@ struct WidgetSnapshot: Codable, Equatable {
         partnerMoodEmoji: "🥺",
         nextDateTitle: "Your next date",
         nextDateTime: "9:30 PM",
+        partnerMoodNote: "Wish you were here right now",
+        countdownProgress: 0.64,
         lastPingMessage: "Missing you ❤️",
         lastPingFrom: "Your partner",
         lastPingWhen: "2h ago"

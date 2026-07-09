@@ -23,6 +23,7 @@ struct TweliApp: App {
                     }
                     appDelegate.onRemoteChange = { app.syncNow() }
                 }
+                .onOpenURL { app.handleDeepLink($0) }   // widget "Send love" deep link
                 .environmentObject(app)
                 .environmentObject(app.auth)
                 .environmentObject(app.coupleSpaceService)

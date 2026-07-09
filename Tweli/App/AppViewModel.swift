@@ -25,6 +25,22 @@ final class AppViewModel: ObservableObject {
     static let noPartnerId = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
     private var cancellables = Set<AnyCancellable>()
 
+    /// Deep-link targets (widget "Send love" → Moods tab, focus the message field).
+    @Published var requestedTab: Int?
+    @Published var focusMoodMessage = false
+
+    /// Handle a tweli:// deep link opened from a widget.
+    func handleDeepLink(_ url: URL) {
+        guard url.scheme == "tweli" else { return }
+        switch url.host {
+        case "sendlove", "mood":
+            requestedTab = 3            // Moods tab
+            focusMoodMessage = true
+        default:
+            break
+        }
+    }
+
     // MARK: - Services (shared graph)
     let auth = AuthService()
     let cloud = CloudKitService()
@@ -122,6 +138,9 @@ final class AppViewModel: ObservableObject {
             partnerMoodEmoji: mood?.mood.emoji ?? "💗",
             nextDateTitle: date?.title ?? "No date planned",
             nextDateTime: date.map { $0.date.formatted(date: .omitted, time: .shortened) } ?? "—",
+            partnerMoodNote: mood?.note ?? "",
+            countdownProgress: cd?.progress ?? 0,
+            userInitial: currentUser.initials,
             lastPingMessage: ping?.message ?? "Send a little love",
             lastPingFrom: pingFrom,
             lastPingWhen: ping?.relativeLabel ?? ""

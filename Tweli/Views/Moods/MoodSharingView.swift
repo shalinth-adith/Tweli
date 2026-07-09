@@ -12,6 +12,12 @@ struct MoodSharingView: View {
     @EnvironmentObject private var app: AppViewModel
     @EnvironmentObject private var service: MoodService
 
+    @State private var message = ""
+    @FocusState private var messageFocused: Bool
+
+    /// Keeps the message short enough to sit comfortably on the widget.
+    private let messageLimit = 80
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -42,6 +48,13 @@ struct MoodSharingView: View {
         .background(Color.twBackground.ignoresSafeArea())
         .navigationTitle("Moods")
         .navigationDestination(for: MoodTarget.self) { MoodDetailView(target: $0) }
+        .onAppear {
+            if message.isEmpty, let existing = service.myMood?.note { message = existing }
+            if app.focusMoodMessage { messageFocused = true; app.focusMoodMessage = false }
+        }
+        .onChange(of: app.focusMoodMessage) { _, focus in
+            if focus { messageFocused = true; app.focusMoodMessage = false }
+        }
     }
 
     // MARK: - Reusable mood meter card
@@ -85,18 +98,50 @@ struct MoodSharingView: View {
     private var feelingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("How are you feeling?").font(.headline).foregroundStyle(.primary)
+
+            // Custom message — travels with your mood and sits on your partner's widget.
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "text.bubble.fill").foregroundStyle(Color.twAccent2)
+                        .padding(.top, 2)
+                    TextField("Add a message for \(app.partner?.displayName ?? "your partner")…",
+                              text: $message, axis: .vertical)
+                        .lineLimit(1...3)
+                        .focused($messageFocused)
+                        .onChange(of: message) { _, new in
+                            if new.count > messageLimit { message = String(new.prefix(messageLimit)) }
+                        }
+                }
+                .padding(14)
+                .background(Color.twElevated)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                HStack {
+                    Text("Shows on \(app.partner?.displayName ?? "your partner")'s widget")
+                        .font(.caption2).foregroundStyle(.tertiary)
+                    Spacer()
+                    Text("\(message.count)/\(messageLimit)")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(message.count >= messageLimit ? Color.twWarn : Color.twInkTertiary)
+                }
+            }
+
             FlowLayout(spacing: 10) {
                 ForEach(PartnerMood.allCases) { mood in
                     moodChip(mood)
                 }
             }
+            Text("Pick a mood to share it — along with your message.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
     private func moodChip(_ mood: PartnerMood) -> some View {
         let selected = service.myMood?.mood == mood
         return Button {
-            withAnimation(.snappy) { service.setMyMood(mood) }
+            let note = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            withAnimation(.snappy) { service.setMyMood(mood, note: note.isEmpty ? nil : note) }
+            messageFocused = false
         } label: {
             HStack(spacing: 5) {
                 if selected { Image(systemName: "checkmark").font(.caption2.weight(.bold)) }

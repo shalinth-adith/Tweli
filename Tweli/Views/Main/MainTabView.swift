@@ -29,6 +29,14 @@ struct MainTabView: View {
             NavigationStack { OpenWhenLettersView() }
                 .tabItem { Label("Letters", systemImage: "envelope.fill") }.tag(4)
         }
+        .onChange(of: app.requestedTab) { _, newValue in
+            if let tab = newValue { selection = tab; app.requestedTab = nil }
+        }
+        .onAppear {
+            // Consume a deep link that arrived before this view began observing
+            // (e.g. cold launch straight from the widget).
+            if let tab = app.requestedTab { selection = tab; app.requestedTab = nil }
+        }
         .task {
             // Ask for notification permission once the user is in the app, then
             // schedule all reminder + countdown alerts (guarded to run once).
