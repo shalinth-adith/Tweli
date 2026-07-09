@@ -58,18 +58,32 @@ struct CreateSpaceView: View {
         preparingShare = true
         shareError = nil
         defer { preparingShare = false }
-        await app.cloud.refreshAccountStatus()
-        guard app.cloud.accountAvailable else {
-            shareError = "Sign in to iCloud on this device to create an invite link."
-            return
-        }
         do {
+            // Precise iCloud diagnostics so we can see WHY sharing can't start.
+            let status = try await app.cloud.container.accountStatus()
+            guard status == .available else {
+                switch status {
+                case .noAccount:
+                    shareError = "No iCloud account on this device. Open Settings ▸ [your name] ▸ iCloud and sign in, then try again."
+                case .restricted:
+                    shareError = "iCloud is restricted on this device (Screen Time / MDM). Sharing needs iCloud enabled."
+                case .couldNotDetermine:
+                    shareError = "Couldn't reach iCloud. Check your internet connection and try again."
+                case .temporarilyUnavailable:
+                    shareError = "iCloud is temporarily unavailable. Try again in a moment."
+                @unknown default:
+                    shareError = "iCloud isn't available on this device."
+                }
+                return
+            }
             let share = try await app.cloud.createShare(title: spaceName.isEmpty ? "Our Space" : spaceName)
             cloudShare = share
             if let url = share.url {
                 inviteLink = url.absoluteString
             } else {
-                shareError = "Couldn't get the link URL. Try 'Share invite' to send it."
+                // Share saved but URL not yet populated — present the native sheet,
+                // which can still send it (Messages / Copy Link / etc.).
+                showCloudShare = true
             }
         } catch {
             shareError = "Couldn't create the invite link: \(error.localizedDescription)"
