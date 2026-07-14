@@ -52,7 +52,7 @@ struct RoomSetupView: View {
             .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
             .navigationDestination(for: Route.self) { route in
                 switch route {
-                case .create: CreateSpaceView()
+                case .create: CreateSpaceView(onSwitchToJoin: { path = [.join] })
                 case .join: JoinSpaceView()
                 }
             }

@@ -36,6 +36,11 @@ struct RootView: View {
             JoinConfirmView(invite: invite)
                 .environmentObject(app)
         }
+        .fullScreenCover(isPresented: $app.showJoiningWaiter) {
+            JoiningView()
+                .environmentObject(app)
+                .environmentObject(couple)
+        }
         .task {
             // Let the entry animation play (dots + thread + wordmark land ~2.4s),
             // then reveal the app. (Notification permission is asked once the user

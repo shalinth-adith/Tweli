@@ -20,6 +20,10 @@ final class AppViewModel: ObservableObject {
     /// The share is only accepted once the user taps Join (see `confirmPendingJoin`).
     @Published var pendingInvite: PendingInvite?
 
+    /// Drives the full-screen "Tying your thread…" waiting screen (design 19g/h)
+    /// shown to the owner after they create a space, until their partner joins.
+    @Published var showJoiningWaiter = false
+
     /// Sentinel partner id used before anyone has joined — matches no real record.
     static let noPartnerId = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
     private var cancellables = Set<AnyCancellable>()
@@ -285,6 +289,24 @@ final class AppViewModel: ObservableObject {
 
     /// User dismissed the invite without joining.
     func cancelPendingJoin() { pendingInvite = nil }
+
+    // MARK: - Owner "waiting for partner" flow (design 19g/h)
+
+    /// Called from the invite-code step's Continue. Completes local setup (so the
+    /// space is live and listeners start), then raises the full-screen waiting
+    /// screen. When the partner joins, the space-doc listener fills in
+    /// `coupleSpaceService.partner`, which the waiting screen watches to advance.
+    func beginOwnerWaiting(title: String) {
+        if !coupleSpaceService.isConnected {
+            coupleSpaceService.createSpace(title: title)
+        }
+        syncNow()
+        showJoiningWaiter = true
+    }
+
+    /// Dismiss the waiting screen and land in the app (partner joined, or the
+    /// owner chose to enter now).
+    func finishOwnerWaiting() { showJoiningWaiter = false }
 
     // MARK: - Notification permission
 

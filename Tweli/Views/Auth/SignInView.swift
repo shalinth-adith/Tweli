@@ -2,8 +2,9 @@
 //  SignInView.swift
 //  Tweli
 //
-//  First screen: Sign in with Apple (iOS-only). On success AuthService stores
-//  the Apple user id + name and the app advances to room setup.
+//  Design 19a/19b — Sign in. Brand backdrop, animated thread logo, and the
+//  Sign in with Apple flow (the only provider for launch). Google / email in
+//  the comp are intentionally deferred until their backends exist.
 //
 
 import SwiftUI
@@ -15,73 +16,110 @@ struct SignInView: View {
     @State private var appear = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
+        ZStack {
+            BrandBackground()
 
-            HStack(spacing: 10) {
-                dot(.twAccent2)
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 52))
-                    .foregroundStyle(Color.twAccent)
-                    .scaleEffect(appear ? 1 : 0.4)
-                dot(Color(red: 1, green: 0.42, blue: 0.54))
+            VStack(spacing: 0) {
+                Spacer()
+                header
+                Spacer()
+                Spacer()
+                actions
             }
-            .opacity(appear ? 1 : 0)
-            .padding(.bottom, 30)
-
-            VStack(spacing: 10) {
-                Text("Tweli").font(.system(size: 38, weight: .heavy)).foregroundStyle(.primary)
-                Text("Two hearts. One space.\nAny distance.")
-                    .font(.system(size: 16)).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).lineSpacing(3)
-            }
-            .opacity(appear ? 1 : 0)
-
-            Spacer()
-            Spacer()
-
-            VStack(spacing: 12) {
-                SignInWithAppleButton(.signIn) { request in
-                    auth.configure(request)
-                } onCompletion: { result in
-                    auth.handleCompletion(result)
-                }
-                .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
-                .frame(height: 52)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                if auth.isSigningIn {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("Finishing sign-in…").font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
-
-                if let error = auth.authError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote).foregroundStyle(.orange)
-                        .multilineTextAlignment(.leading)
-                }
-
-                Text("We use your Apple account so only you two share this space.")
-                    .font(.caption).foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
-
-#if DEBUG
-                Button("Continue in dev mode") { auth.devSignIn() }
-                    .font(.footnote).foregroundStyle(.secondary)
-                    .padding(.top, 6)
-#endif
-            }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 40)
+            .padding(.horizontal, 26)
+            .padding(.bottom, 24)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.twBackground.ignoresSafeArea())
-        .onAppear { withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) { appear = true } }
+        .onAppear {
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.72)) { appear = true }
+        }
     }
 
-    private func dot(_ color: Color) -> some View {
-        Circle().fill(color).frame(width: 13, height: 13)
+    // MARK: - Header
+
+    private var header: some View {
+        VStack(spacing: 0) {
+            ThreadLogo(size: 56)
+                .padding(22)
+                .background(logoTile)
+                .scaleEffect(appear ? 1 : 0.6)
+                .opacity(appear ? 1 : 0)
+
+            Text("TWELI")
+                .font(.system(size: 15, weight: .semibold))
+                .kerning(7)
+                .foregroundStyle(.primary)
+                .padding(.top, 22)
+                .opacity(appear ? 1 : 0)
+
+            Text("Two of you.\nOne space.")
+                .font(.system(size: 32, weight: .heavy))
+                .kerning(-0.8)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.primary)
+                .padding(.top, 16)
+                .opacity(appear ? 1 : 0)
+
+            Text("Reminders, dates, moods and letters — shared with the only person who matters.")
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
+                .frame(maxWidth: 290)
+                .padding(.top, 12)
+                .opacity(appear ? 1 : 0)
+        }
+    }
+
+    private var logoTile: some View {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .fill(scheme == .dark
+                  ? LinearGradient(colors: [Color(hex: "1E1830"), Color(hex: "0D0A16")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                  : LinearGradient(colors: [Color(hex: "FFFFFF"), Color(hex: "F1F0FF")], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: 88, height: 88)
+            .shadow(color: Brand.indigo.opacity(scheme == .dark ? 0.4 : 0.18), radius: 20, y: 12)
+    }
+
+    // MARK: - Actions
+
+    private var actions: some View {
+        VStack(spacing: 12) {
+            SignInWithAppleButton(.continue) { request in
+                auth.configure(request)
+            } onCompletion: { result in
+                auth.handleCompletion(result)
+            }
+            .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
+            .frame(height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .disabled(auth.isSigningIn)
+
+            if auth.isSigningIn {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Finishing sign-in…")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            } else if let error = auth.authError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(Brand.pink)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+            }
+
+            Text("By continuing you agree to our Terms & Privacy.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 2)
+
+#if DEBUG
+            Button("Continue in dev mode") { auth.devSignIn() }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+#endif
+        }
+        .opacity(appear ? 1 : 0)
     }
 }
