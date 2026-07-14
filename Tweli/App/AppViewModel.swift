@@ -215,6 +215,15 @@ final class AppViewModel: ObservableObject {
     func syncNow() {
         Task {
             await cloud.refreshAccountStatus()
+            // Upgrade path: a pre-Firebase build left a local "signed in" flag but
+            // no Firebase Auth session (the credential exchange only runs during
+            // sign-in). Without a UID every Firestore call fails as .network, so
+            // drop the stale session and let SignInView run the real exchange.
+            if auth.isSignedIn, cloud.currentUid == nil {
+                print("[Auth] stale pre-Firebase session detected — signing out to re-auth")
+                auth.signOut()
+                return
+            }
             guard cloud.role != .none else { return }
             if !listenersStarted {
                 listenersStarted = true

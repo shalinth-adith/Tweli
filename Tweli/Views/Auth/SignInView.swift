@@ -50,6 +50,19 @@ struct SignInView: View {
                 .frame(height: 52)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
+                if auth.isSigningIn {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Finishing sign-in…").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+
+                if let error = auth.authError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote).foregroundStyle(.orange)
+                        .multilineTextAlignment(.leading)
+                }
+
                 Text("We use your Apple account so only you two share this space.")
                     .font(.caption).foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)

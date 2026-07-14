@@ -20,6 +20,12 @@ final class AuthService: ObservableObject {
     @Published private(set) var appleUserId: String?     // now holds the Firebase UID
     @Published private(set) var displayName: String
 
+    /// Sign-in progress + failure surfaced to SignInView. Errors used to go only
+    /// to print(), which made a failed Firebase exchange look like "nothing
+    /// happened" on TestFlight builds.
+    @Published private(set) var isSigningIn = false
+    @Published private(set) var authError: String?
+
     private let userIdKey = "tweli.auth.appleUserId"
     private let nameKey = "tweli.auth.displayName"
     private let defaults = UserDefaults.standard
@@ -58,6 +64,7 @@ final class AuthService: ObservableObject {
     /// Handle the button's completion result. On success, exchange Apple's credential
     /// for a Firebase session, then persist the Firebase UID + display name.
     func handleCompletion(_ result: Result<ASAuthorization, Error>) {
+        authError = nil
         switch result {
         case .success(let authorization):
             guard let cred = authorization.credential as? ASAuthorizationAppleIDCredential,
@@ -65,24 +72,34 @@ final class AuthService: ObservableObject {
                   let idToken = String(data: tokenData, encoding: .utf8),
                   let rawNonce = currentNonce else {
                 print("[Auth] missing identity token or nonce")
+                authError = "Apple didn't return a sign-in token. Please try again."
                 return
             }
             let fullName = cred.fullName
+            isSigningIn = true
             Task {
                 do {
                     guard let exchange = exchangeCredential else {
                         print("[Auth] credential exchange not wired")
+                        authError = "Sign-in isn't wired up correctly. Please reinstall the app."
+                        isSigningIn = false
                         return
                     }
                     let (uid, name) = try await exchange(idToken, rawNonce, fullName)
                     store(userId: uid, name: name.isEmpty ? fallbackName() : name)
                 } catch {
-                    print("[Auth] Firebase credential exchange failed: \(error.localizedDescription)")
+                    print("[Auth] Firebase credential exchange failed: \(error)")
+                    authError = "Couldn't finish signing in: \(error.localizedDescription)"
                 }
+                isSigningIn = false
                 currentNonce = nil
             }
         case .failure(let error):
-            print("[Auth] Sign in with Apple failed: \(error.localizedDescription)")
+            // A user-cancelled sheet is not an error worth shouting about.
+            if (error as? ASAuthorizationError)?.code != .canceled {
+                print("[Auth] Sign in with Apple failed: \(error.localizedDescription)")
+                authError = "Sign in with Apple failed: \(error.localizedDescription)"
+            }
             currentNonce = nil
         }
     }
