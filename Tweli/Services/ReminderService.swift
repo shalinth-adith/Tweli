@@ -21,9 +21,9 @@ final class ReminderService: ObservableObject {
     var onDataChanged: (() -> Void)?
 
     private let notifications: ReminderNotificationService
-    private let cloud: CloudKitService
+    private let cloud: FirebaseService
 
-    init(notifications: ReminderNotificationService, cloud: CloudKitService) {
+    init(notifications: ReminderNotificationService, cloud: FirebaseService) {
         self.notifications = notifications
         self.cloud = cloud
 #if DEBUG

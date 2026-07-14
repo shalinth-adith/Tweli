@@ -12,10 +12,10 @@ final class CountdownService: ObservableObject {
     @Published private(set) var countdowns: [CountdownItem]
 
     var onDataChanged: (() -> Void)?
-    private let cloud: CloudKitService
+    private let cloud: FirebaseService
     private let notifications: ReminderNotificationService
 
-    init(cloud: CloudKitService, notifications: ReminderNotificationService) {
+    init(cloud: FirebaseService, notifications: ReminderNotificationService) {
         self.cloud = cloud
         self.notifications = notifications
 #if DEBUG

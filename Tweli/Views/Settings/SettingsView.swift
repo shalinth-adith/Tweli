@@ -16,7 +16,7 @@ struct SettingsView: View {
         Form {
             Section("Connection") {
                 row("person.2.fill", "Partner", couple.partner?.displayName ?? "Not connected", .twAccent)
-                row("icloud.fill", "iCloud sync", "On (mock)", .twAccent2)
+                row("arrow.triangle.2.circlepath", "Sync", syncStatusText, .twAccent2)
             }
 
             Section("Notifications") {
@@ -56,6 +56,15 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { notifications.refreshAuthorizationStatus() }
+    }
+
+    /// Real sync state (replaces the retired "iCloud sync — On (mock)" row):
+    /// Connected = space exists and Firebase reachable; Offline = space exists
+    /// but no Firebase session (persistent cache serving data); Not connected =
+    /// no shared space yet.
+    private var syncStatusText: String {
+        if couple.coupleSpace == nil { return "Not connected" }
+        return app.cloud.accountAvailable ? "Connected" : "Offline"
     }
 
     private var notificationStatusText: String {

@@ -1,0 +1,126 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Helpers ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Reads the space doc to check membership. One document read, billed to the caller.
+    function spaceData(spaceId) {
+      return get(/databases/$(database)/documents/spaces/$(spaceId)).data;
+    }
+
+    function isMember(spaceId) {
+      return isSignedIn()
+        && request.auth.uid in spaceData(spaceId).memberUids;
+    }
+
+    // ---- spaces/{spaceId} ----
+    match /spaces/{spaceId} {
+
+      // Only the two members can read the space.
+      allow get, list: if isSignedIn()
+        && request.auth.uid in resource.data.memberUids;
+
+      // CREATE: creator seeds a solo space. They must be the owner AND the only member.
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberUids == [request.auth.uid]
+        && request.resource.data.memberNames.keys().hasOnly([request.auth.uid])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 100;
+
+      // UPDATE — two allowed shapes:
+      //  (a) JOIN: a non-member atomically becomes the 2nd member (max 2, no takeover).
+      //  (b) MEMBER EDIT: an existing member updates title/memberNames/updatedAt only.
+      allow update: if isSignedIn() && (
+        isAtomicJoin(spaceId) || isMemberEdit(spaceId)
+      );
+
+      // Never delete the space from the client (leave() clears local state only).
+      allow delete: if false;
+
+      // (a) Atomic join: caller is NOT currently a member, space currently has exactly
+      // one member, result has exactly two, the incoming caller is the new member, the
+      // original member and owner are preserved, and no other space state is altered.
+      function isAtomicJoin(spaceId) {
+        return
+          !(request.auth.uid in resource.data.memberUids)
+          && resource.data.memberUids.size() == 1
+          && request.resource.data.memberUids.size() == 2
+          && request.auth.uid in request.resource.data.memberUids
+          && resource.data.memberUids[0] in request.resource.data.memberUids
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.title == resource.data.title
+          && request.resource.data.createdAt == resource.data.createdAt
+          // Joiner may add only their own name entry to memberNames.
+          && request.resource.data.memberNames.keys().hasOnly(
+               resource.data.memberNames.keys().concat([request.auth.uid]))
+          && request.resource.data.memberNames[request.auth.uid] is string;
+      }
+
+      // (b) Existing member edits metadata; membership + owner are frozen.
+      function isMemberEdit(spaceId) {
+        return
+          request.auth.uid in resource.data.memberUids
+          && request.resource.data.memberUids == resource.data.memberUids
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.title is string
+          && request.resource.data.title.size() >= 1
+          && request.resource.data.title.size() <= 100;
+      }
+
+      // ---- Item subcollections (all six share identical rules) ----
+      match /{itemType}/{itemId} {
+        // Restrict to the six known subcollections; reject anything else.
+        function isKnownItemType() {
+          return itemType in
+            ['reminders','countdowns','letters','virtualDates','moods','pings'];
+        }
+
+        function validItem() {
+          return request.resource.data.payload is string
+            && request.resource.data.payload.size() <= 100000   // ~100 KB guard, well under 1 MB
+            && request.resource.data.authorUid == request.auth.uid
+            && request.resource.data.schemaVersion is int;
+        }
+
+        allow read: if isKnownItemType() && isMember(spaceId);
+
+        allow create, update: if isKnownItemType()
+          && isMember(spaceId)
+          && validItem();
+
+        // Either member may delete any item (matches CloudKit shared-zone behavior,
+        // where both partners could delete records in the shared hierarchy).
+        allow delete: if isKnownItemType() && isMember(spaceId);
+      }
+    }
+
+    // ---- pairCodes/{code} ----
+    match /pairCodes/{code} {
+      // Redemption must work for the not-yet-a-member partner, so any signed-in user
+      // may read a code by ID. Codes carry no private data beyond a space title +
+      // spaceId; a guessed code still cannot join without passing the space join rule.
+      allow get: if isSignedIn();
+
+      // Do NOT allow listing/enumeration of all codes.
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.spaceId is string
+        && request.resource.data.spaceTitle is string
+        && request.resource.data.expiresAt is timestamp;
+
+      // Only the creator may refresh/delete their own code.
+      allow update, delete: if isSignedIn()
+        && resource.data.createdBy == request.auth.uid;
+    }
+  }
+}

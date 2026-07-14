@@ -7,7 +7,6 @@
 
 import SwiftUI
 import UIKit
-import CloudKit
 
 struct CreateSpaceView: View {
     @EnvironmentObject private var app: AppViewModel
@@ -15,15 +14,31 @@ struct CreateSpaceView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var spaceName = ""
-    @State private var inviteLink = ""          // the REAL CKShare URL, once created
+    @State private var inviteLink = ""          // tweli://join?code=… once the code exists
+    @State private var pairCode = ""            // 6-char code published to the public DB
     @State private var copied = false
-    @State private var cloudShare: CKShare?
-    @State private var showCloudShare = false
-    @State private var showLinkShare = false
+    @State private var codeCopied = false
     @State private var preparingShare = false
     @State private var shareError: String?
 
     private var partnerName: String { app.partner?.displayName ?? "your partner" }
+
+    /// "7GK4PB" → "7GK-4PB" for readability.
+    private var displayCode: String {
+        pairCode.count == 6 ? "\(pairCode.prefix(3))-\(pairCode.suffix(3))" : pairCode
+    }
+
+    /// What actually gets sent to the partner. The iCloud link is the tappable
+    /// door (WhatsApp/iMessage only linkify https URLs — custom tweli:// schemes
+    /// render as plain text there); the code is the typeable fallback.
+    private var shareMessage: String {
+        var lines = ["💞 Join me on Tweli!"]
+        if !inviteLink.isEmpty { lines.append("\nTap to join: \(inviteLink)") }
+        if !pairCode.isEmpty {
+            lines.append("\nOr open Tweli ▸ Join space ▸ enter code: \(displayCode)")
+        }
+        return lines.joined(separator: "\n")
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,50 +58,37 @@ struct CreateSpaceView: View {
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Create space")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showCloudShare) {
-            if let cloudShare {
-                CloudSharingSheet(share: cloudShare, container: app.cloud.container)
-            }
-        }
-        .sheet(isPresented: $showLinkShare) { ActivityView(items: [inviteLink]) }
     }
 
-    /// Creates the real CloudKit share and captures its public URL — a proper
-    /// https://www.icloud.com/share/… link that opens Tweli when tapped. Needs an
-    /// iCloud account (real device); on the simulator this reports why it can't.
+    /// Does the whole invite dance inline: create (or reuse) the space, then
+    /// publish the 6-char pairing code. Two quick Firestore writes — no
+    /// server-minted URL to poll for, and no dependency on the user's iCloud
+    /// account or storage. The code IS the invite; the tweli:// link just
+    /// carries it. Every failure surfaces as a visible message, never a
+    /// silent spinner.
     private func createInviteLink() async {
         preparingShare = true
         shareError = nil
         defer { preparingShare = false }
         do {
-            // Precise iCloud diagnostics so we can see WHY sharing can't start.
-            let status = try await app.cloud.container.accountStatus()
-            guard status == .available else {
-                switch status {
-                case .noAccount:
-                    shareError = "No iCloud account on this device. Open Settings ▸ [your name] ▸ iCloud and sign in, then try again."
-                case .restricted:
-                    shareError = "iCloud is restricted on this device (Screen Time / MDM). Sharing needs iCloud enabled."
-                case .couldNotDetermine:
-                    shareError = "Couldn't reach iCloud. Check your internet connection and try again."
-                case .temporarilyUnavailable:
-                    shareError = "iCloud is temporarily unavailable. Try again in a moment."
-                @unknown default:
-                    shareError = "iCloud isn't available on this device."
-                }
-                return
+            let title = spaceName.isEmpty ? "Our Space" : spaceName
+
+            // 1. Create the space once; re-taps reuse it (role flips to
+            //    .owner on the first success).
+            if app.cloud.role != .owner {
+                _ = try await app.cloud.createSpace(title: title)
             }
-            let share = try await app.cloud.createShare(title: spaceName.isEmpty ? "Our Space" : spaceName)
-            cloudShare = share
-            if let url = share.url {
-                inviteLink = url.absoluteString
-            } else {
-                // Share saved but URL not yet populated — present the native sheet,
-                // which can still send it (Messages / Copy Link / etc.).
-                showCloudShare = true
-            }
+
+            // 2. Publish (or reuse an unexpired) pairing code.
+            let code = try await app.cloud.publishPairCode(spaceTitle: title)
+            pairCode = code
+            inviteLink = "tweli://join?code=\(code)"
+        } catch let e as FirebaseService.PairCodeError {
+            shareError = e.localizedDescription
+            print("[Firebase] createInviteLink failed: \(e)")
         } catch {
             shareError = "Couldn't create the invite link: \(error.localizedDescription)"
+            print("[Firebase] createInviteLink failed: \(error)")
         }
     }
 
@@ -155,8 +157,10 @@ struct CreateSpaceView: View {
                             .font(.caption).foregroundStyle(Color.twWarn)
                     }
                 } else {
-                    Text("Share this link so \(partnerName) can join your space.")
+                    Text("Share this invite so \(partnerName) can join your space.")
                         .font(.footnote).foregroundStyle(.secondary)
+
+                    if !pairCode.isEmpty { codeCard }
 
                     HStack(spacing: 10) {
                         Text(inviteLink)
@@ -180,9 +184,9 @@ struct CreateSpaceView: View {
                     .background(Color(UIColor.systemGroupedBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
 
-                    Button {
-                        showLinkShare = true   // normal share sheet → WhatsApp / Messages / Copy
-                    } label: {
+                    // Native SwiftUI share — a UIKit UIActivityViewController wrapped
+                    // in a .sheet renders a black screen on modern iOS.
+                    ShareLink(item: shareMessage) {
                         HStack(spacing: 8) {
                             Image(systemName: "square.and.arrow.up")
                             Text("Share invite").fontWeight(.semibold)
@@ -199,6 +203,36 @@ struct CreateSpaceView: View {
             .background(Color(UIColor.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+    }
+
+    /// The big, friendly pairing code — the easiest thing to read out or type.
+    private var codeCard: some View {
+        VStack(spacing: 6) {
+            Text("INVITE CODE")
+                .font(.caption2.weight(.bold))
+                .kerning(1.2)
+                .foregroundStyle(.tertiary)
+            Text(displayCode)
+                .font(.system(size: 34, weight: .heavy, design: .monospaced))
+                .kerning(2)
+                .foregroundStyle(Color.twAccent)
+            Button {
+                UIPasteboard.general.string = pairCode
+                withAnimation { codeCopied = true }
+                Task { try? await Task.sleep(nanoseconds: 1_500_000_000); withAnimation { codeCopied = false } }
+            } label: {
+                Label(codeCopied ? "Copied" : "Copy code", systemImage: codeCopied ? "checkmark" : "doc.on.doc")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .foregroundStyle(Color.twAccent)
+                    .background(Color.twAccentSoft, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(Color(UIColor.systemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
 
     private var continueBar: some View {

@@ -13,14 +13,14 @@ final class CoupleSpaceService: ObservableObject {
     @Published private(set) var currentUser: UserProfile
     @Published private(set) var partner: UserProfile?
 
-    private let cloud: CloudKitService
+    private let cloud: FirebaseService
     private let setupKey = "tweli.roomSetupComplete"
     private let userKey = "tweli.currentUser"
     private let spaceKey = "tweli.coupleSpace"
     private let partnerKey = "tweli.partner"
     private let defaults = UserDefaults.standard
 
-    init(cloud: CloudKitService) {
+    init(cloud: FirebaseService) {
         self.cloud = cloud
 
         // Real, persisted identity — created once per install, name filled from

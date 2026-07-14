@@ -12,10 +12,10 @@ final class VirtualDateService: ObservableObject {
     @Published private(set) var dates: [VirtualDateItem]
 
     var onDataChanged: (() -> Void)?
-    private let cloud: CloudKitService
+    private let cloud: FirebaseService
     private let notifications: ReminderNotificationService
 
-    init(cloud: CloudKitService, notifications: ReminderNotificationService) {
+    init(cloud: FirebaseService, notifications: ReminderNotificationService) {
         self.cloud = cloud
         self.notifications = notifications
 #if DEBUG

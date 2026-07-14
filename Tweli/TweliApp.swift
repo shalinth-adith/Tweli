@@ -17,11 +17,11 @@ struct TweliApp: App {
         WindowGroup {
             RootView()
                 .onAppear {
-                    // Route CloudKit delegate callbacks into the app.
-                    appDelegate.onAcceptShare = { metadata in
-                        Task { await app.handleAcceptedShare(metadata) }
-                    }
+                    // Route app-delegate callbacks into the app.
                     appDelegate.onRemoteChange = { app.syncNow() }
+                    appDelegate.onFCMToken = { token in
+                        Task { await app.cloud.updateFCMToken(token) }
+                    }
                 }
                 .onOpenURL { app.handleDeepLink($0) }   // widget "Send love" deep link
                 .environmentObject(app)

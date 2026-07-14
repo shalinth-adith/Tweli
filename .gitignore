@@ -38,3 +38,6 @@ fastlane/screenshots
 *.mobileprovision
 *.p12
 *.cer
+
+# Firebase config — contains API key; obtain from Firebase console
+GoogleService-Info.plist

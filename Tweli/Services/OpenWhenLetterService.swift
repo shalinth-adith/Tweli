@@ -12,9 +12,9 @@ final class OpenWhenLetterService: ObservableObject {
     @Published private(set) var letters: [OpenWhenLetter]
 
     var onDataChanged: (() -> Void)?
-    private let cloud: CloudKitService
+    private let cloud: FirebaseService
 
-    init(cloud: CloudKitService) {
+    init(cloud: FirebaseService) {
         self.cloud = cloud
 #if DEBUG
         self.letters = MockData.letters   // demo data for design/dev builds only

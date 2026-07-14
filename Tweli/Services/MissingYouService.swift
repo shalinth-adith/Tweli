@@ -15,9 +15,9 @@ final class MissingYouService: ObservableObject {
     var partnerId = UUID()
     var coupleSpaceId = UUID()
     var onDataChanged: (() -> Void)?
-    private let cloud: CloudKitService
+    private let cloud: FirebaseService
 
-    init(cloud: CloudKitService) {
+    init(cloud: FirebaseService) {
         self.cloud = cloud
 #if DEBUG
         self.pings = MockData.pings   // demo data for design/dev builds only

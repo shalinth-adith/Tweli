@@ -14,9 +14,9 @@ final class MoodService: ObservableObject {
     var currentUserId = UUID()   // set by AppViewModel.wireIdentities()
     var partnerId = UUID()
     var onDataChanged: (() -> Void)?
-    private let cloud: CloudKitService
+    private let cloud: FirebaseService
 
-    init(cloud: CloudKitService) {
+    init(cloud: FirebaseService) {
         self.cloud = cloud
 #if DEBUG
         self.moods = MockData.moods   // demo data for design/dev builds only

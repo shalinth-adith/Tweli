@@ -9,7 +9,6 @@
 
 import SwiftUI
 import Combine
-import CloudKit
 
 @MainActor
 final class AppViewModel: ObservableObject {
@@ -29,21 +28,47 @@ final class AppViewModel: ObservableObject {
     @Published var requestedTab: Int?
     @Published var focusMoodMessage = false
 
-    /// Handle a tweli:// deep link opened from a widget.
+    /// Set while a pairing code is being redeemed / after it fails, so Join UIs
+    /// can show progress and a friendly error.
+    @Published var redeemingCode = false
+    @Published var joinError: String?
+
+    /// Handle a tweli:// deep link (widget "Send love", or an invite code link —
+    /// tweli://join?code=7GK4PB auto-redeems and pops the confirm-join sheet).
     func handleDeepLink(_ url: URL) {
         guard url.scheme == "tweli" else { return }
         switch url.host {
         case "sendlove", "mood":
             requestedTab = 3            // Moods tab
             focusMoodMessage = true
+        case "join":
+            let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "code" })?.value ?? ""
+            guard !code.isEmpty else { return }
+            Task { await joinWithCode(code) }
         default:
             break
         }
     }
 
+    /// Redeem a pairing code → invite metadata → the confirm-join sheet. Used by the
+    /// deep link AND by manual entry in JoinSpaceView. All three input shapes (typed
+    /// code, tweli://, https://…?code=) converge here.
+    func joinWithCode(_ code: String) async {
+        redeemingCode = true
+        joinError = nil
+        defer { redeemingCode = false }
+        do {
+            let invite = try await cloud.redeemPairCode(code)
+            pendingInvite = PendingInvite(invite: invite)
+        } catch {
+            joinError = error.localizedDescription
+        }
+    }
+
     // MARK: - Services (shared graph)
     let auth = AuthService()
-    let cloud = CloudKitService()
+    let cloud = FirebaseService()
     let notifications = ReminderNotificationService()
     let widget = WidgetDataService()
 
@@ -68,11 +93,25 @@ final class AppViewModel: ObservableObject {
         wireWidgetRefresh()
         refreshWidget()
 
-        // When the user signs in with Apple, apply their real name + re-wire ids.
+        // Bridge AuthService's Sign in with Apple to the Firebase credential exchange
+        // and sign-out, without AuthService importing Firebase.
+        auth.exchangeCredential = { [cloud] idToken, rawNonce, fullName in
+            let user = try await cloud.signInWithApple(idToken: idToken, rawNonce: rawNonce, fullName: fullName)
+            return (user.uid, user.displayName)
+        }
+        auth.onSignOut = { [cloud] in try? cloud.signOut() }
+
+        // When the user signs in, apply their real name + re-wire ids. A DEBUG dev
+        // sign-in additionally puts FirebaseService into its offline `dev-` state.
         auth.$isSignedIn
             .sink { [weak self] signedIn in
                 guard let self, signedIn else { return }
                 self.coupleSpaceService.setDisplayName(self.auth.displayName)
+#if DEBUG
+                if self.auth.appleUserId?.hasPrefix("dev-") == true, self.cloud.currentUid == nil {
+                    self.cloud.devSignIn()
+                }
+#endif
                 self.wireIdentities()
             }
             .store(in: &cancellables)
@@ -164,52 +203,74 @@ final class AppViewModel: ObservableObject {
         countdownService.scheduleAll()
     }
 
-    // MARK: - CloudKit sync
+    // MARK: - Firebase sync
 
-    /// Pull remote changes into the local services and register for push.
-    /// Offline-first: the local store stays authoritative if CloudKit is off.
+    /// True once the Firestore snapshot listeners are attached, so `syncNow()` starts
+    /// them exactly once (further calls just refresh the widget).
+    private var listenersStarted = false
+
+    /// Attach the live Firestore listeners once and register for push. Offline-first:
+    /// Firestore's persistent cache keeps the local store authoritative when the
+    /// backend is unreachable — and, unlike CloudKit, never fails on personal quota.
     func syncNow() {
         Task {
             await cloud.refreshAccountStatus()
             guard cloud.role != .none else { return }
-            let changes = await cloud.fetchChanges()
-            let dec = JSONDecoder()
-            func decode<T: Decodable>(_ type: String) -> [T] {
-                (changes.payloadsByType[type] ?? []).compactMap { try? dec.decode(T.self, from: $0) }
-            }
-            reminderService.mergeRemote(decode(CloudKitService.RType.reminder), deletedIDs: changes.deletedIDs)
-            countdownService.mergeRemote(decode(CloudKitService.RType.countdown), deletedIDs: changes.deletedIDs)
-            letterService.mergeRemote(decode(CloudKitService.RType.letter), deletedIDs: changes.deletedIDs)
-            virtualDateService.mergeRemote(decode(CloudKitService.RType.virtualDate), deletedIDs: changes.deletedIDs)
-            moodService.mergeRemote(decode(CloudKitService.RType.mood), deletedIDs: changes.deletedIDs)
-            missingYouService.mergeRemote(decode(CloudKitService.RType.ping), deletedIDs: changes.deletedIDs)
-            await cloud.registerSubscription()
-            // Owner side: reflect it once the invited person accepts the share.
-            if cloud.role == .owner, coupleSpaceService.awaitingPartner,
-               let name = await cloud.acceptedParticipantName() {
-                coupleSpaceService.setPartnerJoined(name: name)
+            if !listenersStarted {
+                listenersStarted = true
+                cloud.startListening { [weak self] changes in
+                    Task { @MainActor in self?.applyRemoteChanges(changes) }
+                }
+                await cloud.registerForPush()
             }
             refreshWidget()
         }
     }
 
-    /// Partner tapped an invite link — the OS hands us the share metadata. We do
-    /// NOT accept yet; we surface a confirmation sheet and only join on "Join".
-    func handleAcceptedShare(_ metadata: CKShare.Metadata) async {
-        pendingInvite = PendingInvite(metadata: metadata)
+    /// Merge a batch of remote changes delivered by a snapshot listener into the
+    /// local services. The `RemoteChanges` shape is unchanged from the CloudKit
+    /// version, so the decode + mergeRemote wiring is reused verbatim.
+    private func applyRemoteChanges(_ changes: FirebaseService.RemoteChanges) {
+        // Space-doc listener: partner has joined → reflect their name (replaces the
+        // owner-side acceptedParticipantName() poll).
+        if let name = changes.partnerJoinedName, coupleSpaceService.awaitingPartner {
+            coupleSpaceService.setPartnerJoined(name: name)
+        }
+        let dec = JSONDecoder()
+        func decode<T: Decodable>(_ type: String) -> [T] {
+            (changes.payloadsByType[type] ?? []).compactMap { try? dec.decode(T.self, from: $0) }
+        }
+        reminderService.mergeRemote(decode(FirebaseService.RType.reminder), deletedIDs: changes.deletedIDs)
+        countdownService.mergeRemote(decode(FirebaseService.RType.countdown), deletedIDs: changes.deletedIDs)
+        letterService.mergeRemote(decode(FirebaseService.RType.letter), deletedIDs: changes.deletedIDs)
+        virtualDateService.mergeRemote(decode(FirebaseService.RType.virtualDate), deletedIDs: changes.deletedIDs)
+        moodService.mergeRemote(decode(FirebaseService.RType.mood), deletedIDs: changes.deletedIDs)
+        missingYouService.mergeRemote(decode(FirebaseService.RType.ping), deletedIDs: changes.deletedIDs)
+        refreshWidget()
     }
 
-    /// User confirmed the invite — accept the share, become a participant, sync.
-    func confirmPendingJoin() async {
-        guard let invite = pendingInvite else { return }
+    /// User confirmed the invite — atomically join the space, become a participant,
+    /// start listeners. Returns false on failure so the confirm sheet can recover
+    /// instead of sitting on a disabled "Joining…" button forever. On a space-full
+    /// failure the error is surfaced via `joinError` for the confirm sheet's copy.
+    func confirmPendingJoin() async -> Bool {
+        guard let invite = pendingInvite else { return false }
+        let participantName = coupleSpaceService.currentUser.displayName
+        let pairInvite = FirebaseService.PairInvite(spaceId: invite.spaceId,
+                                                    spaceTitle: invite.spaceTitle,
+                                                    inviterName: invite.inviterName)
         do {
-            try await cloud.acceptShare(invite.metadata)
+            try await cloud.joinSpace(pairInvite, participantName: participantName)
             coupleSpaceService.connectAsParticipant(title: invite.spaceTitle,
                                                     partnerName: invite.inviterName)
             pendingInvite = nil
+            joinError = nil
             syncNow()
+            return true
         } catch {
-            print("[CloudKit] accept share failed: \(error.localizedDescription)")
+            print("[Firebase] join space failed: \(error.localizedDescription)")
+            joinError = error.localizedDescription
+            return false
         }
     }
 

@@ -2,36 +2,28 @@
 //  PendingInvite.swift
 //  Tweli
 //
-//  A CloudKit share invite the partner just opened, waiting for confirmation.
-//  Wraps CKShare.Metadata and derives friendly display strings (the space name
-//  and who sent it) for the "confirm join" sheet.
+//  An invite the partner just redeemed, waiting for confirmation. A plain struct
+//  built from the Firestore pair-code / space documents (via FirebaseService's
+//  PairInvite) — no CloudKit share metadata, no share-title parsing.
 //
 
 import Foundation
-import CloudKit
 
 struct PendingInvite: Identifiable {
-    let metadata: CKShare.Metadata
+    let spaceId: String
+    let spaceTitle: String
+    let inviterName: String
 
-    var id: String { metadata.share.recordID.recordName }
+    var id: String { spaceId }
 
-    /// The plain space name, recovered from the share title we set at creation
-    /// ("Join <name> on Tweli 💞"). Falls back gracefully if the format differs.
-    var spaceTitle: String {
-        let raw = (metadata.share[CKShare.SystemFieldKey.title] as? String) ?? ""
-        var name = raw
-        if name.hasPrefix("Join ") { name.removeFirst("Join ".count) }
-        if let range = name.range(of: " on Tweli") { name = String(name[..<range.lowerBound]) }
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        return trimmed.isEmpty ? "your shared space" : trimmed
-    }
-
-    /// The inviter's name from their iCloud identity, if shared.
-    var inviterName: String {
-        if let comps = metadata.ownerIdentity.nameComponents {
-            let formatted = PersonNameComponentsFormatter.localizedString(from: comps, style: .default)
-            if !formatted.isEmpty { return formatted }
-        }
-        return "Your partner"
+    /// Build from a redeemed pair code, preserving the load-bearing non-empty
+    /// fallbacks the confirm sheet relies on for the degraded case (inviter has no
+    /// display name yet, blank space title).
+    init(invite: FirebaseService.PairInvite) {
+        spaceId = invite.spaceId
+        let title = invite.spaceTitle.trimmingCharacters(in: .whitespaces)
+        spaceTitle = title.isEmpty ? "your shared space" : title
+        let name = invite.inviterName.trimmingCharacters(in: .whitespaces)
+        inviterName = name.isEmpty ? "Your partner" : name
     }
 }

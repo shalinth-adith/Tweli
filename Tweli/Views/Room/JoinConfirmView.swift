@@ -13,6 +13,7 @@ struct JoinConfirmView: View {
     let invite: PendingInvite
 
     @State private var joining = false
+    @State private var joinFailed = false
 
     var body: some View {
         VStack(spacing: 22) {
@@ -54,9 +55,26 @@ struct JoinConfirmView: View {
             Spacer(minLength: 8)
 
             VStack(spacing: 10) {
-                PrimaryButton(title: joining ? "Joining…" : "Join space", systemImage: "heart.fill") {
+                if joinFailed {
+                    Label("Couldn't join right now. Check your connection and try again.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(Color.twWarn)
+                        .multilineTextAlignment(.center)
+                }
+
+                PrimaryButton(title: joining ? "Joining…" : (joinFailed ? "Try again" : "Join space"),
+                              systemImage: "heart.fill") {
                     joining = true
-                    Task { await app.confirmPendingJoin() }
+                    joinFailed = false
+                    Task {
+                        let ok = await app.confirmPendingJoin()
+                        if !ok {
+                            // Recover: re-enable the buttons so the user can retry
+                            // or dismiss instead of a forever-disabled "Joining…".
+                            joining = false
+                            joinFailed = true
+                        }
+                    }
                 }
                 .disabled(joining)
 
