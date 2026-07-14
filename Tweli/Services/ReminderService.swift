@@ -138,6 +138,14 @@ final class ReminderService: ObservableObject {
         for item in items {
             if let i = reminders.firstIndex(where: { $0.id == item.id }) { reminders[i] = item }
             else { reminders.append(item) }
+            // A remote reminder must ring on THIS device too. reschedule() is
+            // cancel+schedule, so it also handles edits and completions (schedule
+            // no-ops on completed items). Without this, partner-created reminders
+            // only got scheduled on the next app launch (bootstrapNotifications).
+            notifications.reschedule(for: item)
+        }
+        for id in deletedIDs where reminders.contains(where: { $0.id == id }) {
+            notifications.cancel(id: id)
         }
         if !deletedIDs.isEmpty { reminders.removeAll { deletedIDs.contains($0.id) } }
     }

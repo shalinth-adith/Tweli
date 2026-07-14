@@ -66,6 +66,12 @@ final class CountdownService: ObservableObject {
         for item in items {
             if let i = countdowns.firstIndex(where: { $0.id == item.id }) { countdowns[i] = item }
             else { countdowns.append(item) }
+            // Same fix as ReminderService.mergeRemote: remote countdowns must
+            // schedule their day-zero notification on this device immediately.
+            notifications.rescheduleCountdown(item)
+        }
+        for id in deletedIDs where countdowns.contains(where: { $0.id == id }) {
+            notifications.cancelCountdown(id: id)
         }
         if !deletedIDs.isEmpty { countdowns.removeAll { deletedIDs.contains($0.id) } }
     }
