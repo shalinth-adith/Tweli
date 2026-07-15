@@ -308,6 +308,12 @@ final class AppViewModel: ObservableObject {
     /// owner chose to enter now).
     func finishOwnerWaiting() { showJoiningWaiter = false }
 
+    /// Finish the first-run "About you" step → advance to Create / Join.
+    func finishAboutYou() {
+        coupleSpaceService.completeAboutYou()
+        wireIdentities()   // pick up the freshly-saved display name
+    }
+
     // MARK: - Notification permission
 
     func requestNotificationPermission() {

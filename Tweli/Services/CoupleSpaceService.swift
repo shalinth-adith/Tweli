@@ -13,15 +13,21 @@ final class CoupleSpaceService: ObservableObject {
     @Published private(set) var currentUser: UserProfile
     @Published private(set) var partner: UserProfile?
 
+    /// True once the user has finished (or skipped) the "About you" screen. Drives
+    /// the first-run bio step in RootView.
+    @Published private(set) var hasCompletedAboutYou: Bool
+
     private let cloud: FirebaseService
     private let setupKey = "tweli.roomSetupComplete"
     private let userKey = "tweli.currentUser"
     private let spaceKey = "tweli.coupleSpace"
     private let partnerKey = "tweli.partner"
+    private let aboutYouKey = "tweli.aboutYouDone"
     private let defaults = UserDefaults.standard
 
     init(cloud: FirebaseService) {
         self.cloud = cloud
+        self.hasCompletedAboutYou = defaults.bool(forKey: aboutYouKey)
 
         // Real, persisted identity — created once per install, name filled from
         // the Apple account on sign in. Mock only seeds design/dev builds.
@@ -63,6 +69,25 @@ final class CoupleSpaceService: ObservableObject {
         guard !trimmed.isEmpty else { return }
         currentUser.displayName = trimmed
         save(currentUser, userKey)
+    }
+
+    /// Save the "About you" details onto the current user's profile (design 20a/b).
+    /// Persisted locally; the name still flows to the partner via `memberNames`.
+    func updateProfile(name: String, birthday: Date?, city: String?,
+                       timezoneIdentifier: String?, photoData: Data?) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty { currentUser.displayName = trimmed }
+        currentUser.birthday = birthday
+        currentUser.city = city?.trimmingCharacters(in: .whitespaces)
+        currentUser.timezoneIdentifier = timezoneIdentifier
+        currentUser.photoData = photoData
+        save(currentUser, userKey)
+    }
+
+    /// Mark the first-run "About you" step finished (completed or skipped).
+    func completeAboutYou() {
+        defaults.set(true, forKey: aboutYouKey)
+        hasCompletedAboutYou = true
     }
 
     // MARK: - Persistence

@@ -22,6 +22,9 @@ struct RootView: View {
             } else if !auth.isSignedIn {
                 SignInView()
                     .transition(.opacity)
+            } else if !couple.hasCompletedAboutYou {
+                AboutYouView()
+                    .transition(.opacity)
             } else if !couple.isConnected {
                 RoomSetupView()
                     .transition(.opacity)
@@ -31,6 +34,7 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: auth.isSignedIn)
+        .animation(.easeInOut(duration: 0.35), value: couple.hasCompletedAboutYou)
         .animation(.easeInOut(duration: 0.35), value: couple.isConnected)
         .sheet(item: $app.pendingInvite) { invite in
             JoinConfirmView(invite: invite)

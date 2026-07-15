@@ -53,7 +53,7 @@ struct RoomSetupView: View {
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .create: CreateSpaceView(onSwitchToJoin: { path = [.join] })
-                case .join: JoinSpaceView()
+                case .join: JoinSpaceView(onSwitchToCreate: { path = [.create] })
                 }
             }
         }

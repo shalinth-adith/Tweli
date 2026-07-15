@@ -2,8 +2,9 @@
 //  JoinSpaceView.swift
 //  Tweli
 //
-//  Design 12b — join an existing space with the partner's 6-char invite code
-//  (or by pasting the full invite link).
+//  Design 20c/20d — "Join their space". Two dots waiting to be tied: enter the
+//  6-character code (as segmented tiles) or paste it, then Join → the joining
+//  animation. Redeem logic is unchanged from the code/link flow.
 //
 
 import SwiftUI
@@ -11,129 +12,180 @@ import UIKit
 
 struct JoinSpaceView: View {
     @EnvironmentObject private var app: AppViewModel
+    @EnvironmentObject private var couple: CoupleSpaceService
+    @Environment(\.dismiss) private var dismiss
 
-    @State private var input = ""
+    @State private var code = ""            // up to 6 normalized characters
     @FocusState private var focused: Bool
 
-    private var trimmed: String { input.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// Where "Create a space instead" routes. Provided by the parent.
+    var onSwitchToCreate: (() -> Void)?
 
-    /// Pasted https invite link (iCloud share URL) — opened via the OS.
-    private var pastedURL: URL? {
-        guard let url = URL(string: trimmed),
-              url.scheme?.hasPrefix("http") == true else { return nil }
-        return url
-    }
-
-    /// Code extracted from a pasted tweli://join?code=… link. Any other tweli://
-    /// URL (e.g. the widget's tweli://sendlove) is NOT an invite.
-    private var deepLinkCode: String? {
-        guard let url = URL(string: trimmed), url.scheme == "tweli", url.host == "join",
-              let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                  .queryItems?.first(where: { $0.name == "code" })?.value,
-              !code.isEmpty else { return nil }
-        return code
-    }
-
-    /// 6 valid characters → treat as a pairing code.
-    private var normalizedCode: String { FirebaseService.normalizePairCode(trimmed) }
-    private var isCode: Bool { pastedURL == nil && deepLinkCode == nil && normalizedCode.count == 6 }
-    /// The single code to redeem, whichever way it arrived.
-    private var codeToRedeem: String? { deepLinkCode ?? (isCode ? normalizedCode : nil) }
-    private var isValid: Bool { codeToRedeem != nil || pastedURL != nil }
+    private var normalized: String { FirebaseService.normalizePairCode(code) }
+    private var isComplete: Bool { normalized.count == 6 }
+    private var youInitial: String { couple.currentUser.initials }
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 24) {
-                    header
-                    codeField
-                    if let err = app.joinError { errorCard(err) }
-                    else if isValid { matchedPreview }
-                }
-                .padding(.horizontal, 22)
-                .padding(.top, 20)
-            }
-            joinBar
+            header
+            Spacer()
+            content
+            Spacer()
+            footer
         }
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
-        .navigationTitle("Join space")
-        .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: input) { _ in app.joinError = nil }
-        .onAppear { app.joinError = nil }   // don't show a stale error from an earlier attempt
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear { app.joinError = nil; focused = true }
+        .onChange(of: code) { _, _ in app.joinError = nil }
     }
+
+    // MARK: - Header
 
     private var header: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.twAccent2.opacity(0.12)).frame(width: 64, height: 64)
-                Image(systemName: "arrow.right.to.line")
-                    .font(.system(size: 28, weight: .semibold)).foregroundStyle(Color.twAccent2)
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .bold)).foregroundStyle(.primary)
+                    .frame(width: 34, height: 34)
+                    .background(Color.primary.opacity(0.06), in: Circle())
             }
-            Text("Enter your invite code").font(.system(size: 24, weight: .heavy)).foregroundStyle(.primary)
-            Text("Type the 6-character code your partner shared — or paste their invite link.")
-                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Spacer()
+            HStack(spacing: 6) {
+                Capsule().fill(Brand.pink).frame(width: 22, height: 6)
+                Capsule().fill(Color.primary.opacity(0.18)).frame(width: 6, height: 6)
+            }
+            Spacer()
+            Color.clear.frame(width: 34, height: 34)
         }
+        .padding(.horizontal, 20).padding(.top, 8)
     }
 
-    private var codeField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "number").foregroundStyle(Color.twInkTertiary)
-            TextField("7GK-4PB or invite link", text: $input)
+    // MARK: - Content
+
+    private var content: some View {
+        VStack(spacing: 0) {
+            // Two dots waiting to be tied — you (dashed) + partner (pink).
+            HStack(spacing: 0) {
+                Circle()
+                    .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [5]))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 58, height: 58)
+                    .overlay(Text(youInitial.isEmpty ? "?" : youInitial)
+                        .font(.system(size: 20, weight: .semibold)).foregroundStyle(.secondary))
+                Image(systemName: "ellipsis")
+                    .font(.title3).foregroundStyle(.tertiary).padding(.horizontal, 10)
+                AvatarBubble(initial: "", isPartner: true, size: 58)
+            }
+            .padding(.bottom, 22)
+
+            Text("Join their space")
+                .font(.system(size: 28, weight: .heavy)).kerning(-0.6).foregroundStyle(.primary)
+            Text("Enter the code your partner shared.\nYour dots get tied together.")
+                .font(.system(size: 14.5)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center).padding(.top, 8)
+
+            codeTiles.padding(.top, 28)
+
+            if let err = app.joinError {
+                Label(err, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote).foregroundStyle(Brand.pink)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 16).padding(.horizontal, 24)
+            }
+
+            Button {
+                if let s = UIPasteboard.general.string { code = extractCode(s) }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "doc.on.clipboard").font(.system(size: 14, weight: .semibold))
+                    Text("Paste from clipboard").font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(Brand.indigo)
+                .padding(.horizontal, 18).padding(.vertical, 10)
+                .background(Brand.indigo.opacity(0.1), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 20)
+        }
+        .padding(.horizontal, 22)
+    }
+
+    /// Six tappable tiles backed by a single hidden text field.
+    private var codeTiles: some View {
+        ZStack {
+            TextField("", text: $code)
+                .keyboardType(.asciiCapable)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
-                .font(.body.monospaced())
                 .focused($focused)
-            Button("Paste") {
-                if let s = UIPasteboard.general.string { input = s }
+                .opacity(0.02)
+                .onChange(of: code) { _, new in
+                    // Keep only valid characters, cap at 6.
+                    let cleaned = FirebaseService.normalizePairCode(new)
+                    if cleaned != new { code = String(cleaned.prefix(6)) }
+                    else if new.count > 6 { code = String(new.prefix(6)) }
+                }
+
+            HStack(spacing: 7) {
+                let chars = Array(normalized)
+                ForEach(0..<6, id: \.self) { i in
+                    if i == 3 {
+                        Capsule().fill(Color.primary.opacity(0.2)).frame(width: 12, height: 3)
+                    }
+                    tile(char: i < chars.count ? String(chars[i]) : nil,
+                         active: i == chars.count && focused)
+                }
             }
-            .font(.subheadline.weight(.semibold)).foregroundStyle(Color.twAccent)
+            .allowsHitTesting(false)
         }
-        .padding(15)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture { focused = true }
     }
 
-    private var matchedPreview: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "checkmark.seal.fill").font(.title3).foregroundStyle(Color.twSuccess)
-            Text(isCode ? "Code looks good. Tap Join to find your space."
-                        : "Looks like a valid invite link. Tap Join to open it.")
-                .font(.footnote).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    private func tile(char: String?, active: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 13, style: .continuous)
+            .fill(char == nil ? Color.primary.opacity(0.05) : Color(UIColor.secondarySystemGroupedBackground))
+            .frame(width: 44, height: 56)
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .strokeBorder(active ? Brand.pink : .clear, lineWidth: 2)
+            )
+            .overlay(
+                Text(char ?? "")
+                    .font(.system(size: 26, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.primary)
+            )
     }
 
-    private func errorCard(_ message: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill").font(.title3).foregroundStyle(Color.twWarn)
-            Text(message).font(.footnote).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
+    // MARK: - Footer
 
-    private var joinBar: some View {
-        PrimaryButton(title: app.redeemingCode ? "Finding your space…" : "Join space",
-                      systemImage: app.redeemingCode ? "hourglass" : "heart.fill") {
-            if let code = codeToRedeem {
-                // Code (typed or from a tweli://join link) → public DB lookup →
-                // share metadata → confirm-join sheet. One redeem path.
-                Task { await app.joinWithCode(code) }
-            } else if let url = pastedURL {
-                // iCloud share link: the OS routes it back to us with the
-                // share metadata → the confirm-join sheet appears.
-                UIApplication.shared.open(url)
+    private var footer: some View {
+        VStack(spacing: 10) {
+            BrandCTA(title: app.redeemingCode ? "Finding your space…" : "Join their space",
+                     loading: app.redeemingCode) {
+                Task { await app.joinWithCode(normalized) }
             }
+            .disabled(!isComplete || app.redeemingCode)
+            .opacity(isComplete ? 1 : 0.5)
+
+            Button("Create a space instead") {
+                if let onSwitchToCreate { onSwitchToCreate() } else { dismiss() }
+            }
+            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.secondary)
+            .frame(height: 40)
         }
-        .disabled(!isValid || app.redeemingCode)
-        .opacity(isValid ? 1 : 0.5)
-        .padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 8)
-        .background(.bar)
+        .padding(.horizontal, 20).padding(.bottom, 20)
+    }
+
+    /// Pull a code out of a pasted value — a raw code, or a tweli:// / https link
+    /// carrying `?code=…`.
+    private func extractCode(_ raw: String) -> String {
+        if let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+           let c = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+               .queryItems?.first(where: { $0.name == "code" })?.value {
+            return String(FirebaseService.normalizePairCode(c).prefix(6))
+        }
+        return String(FirebaseService.normalizePairCode(raw).prefix(6))
     }
 }
