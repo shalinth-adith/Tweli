@@ -110,7 +110,7 @@ final class AppViewModel: ObservableObject {
         auth.$isSignedIn
             .sink { [weak self] signedIn in
                 guard let self, signedIn else { return }
-                self.coupleSpaceService.setDisplayName(self.auth.displayName)
+                self.coupleSpaceService.seedDisplayName(self.auth.displayName)
 #if DEBUG
                 if self.auth.appleUserId?.hasPrefix("dev-") == true, self.cloud.currentUid == nil {
                     self.cloud.devSignIn()
@@ -140,7 +140,7 @@ final class AppViewModel: ObservableObject {
     // MARK: - Wiring
 
     private func wireIdentities() {
-        if auth.isSignedIn { coupleSpaceService.setDisplayName(auth.displayName) }
+        if auth.isSignedIn { coupleSpaceService.seedDisplayName(auth.displayName) }
         let meId = coupleSpaceService.currentUser.id
         // No partner yet → a sentinel id that matches no real record (empty data).
         let partnerId = coupleSpaceService.partner?.id ?? Self.noPartnerId

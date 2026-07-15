@@ -71,6 +71,15 @@ final class CoupleSpaceService: ObservableObject {
         save(currentUser, userKey)
     }
 
+    /// Seed the name from the Apple account, but NEVER overwrite a name the user
+    /// has already set (e.g. edited on the "About you" screen). Apple only returns
+    /// a name on first authorization, so this is a one-time seed, not the source
+    /// of truth — `currentUser.displayName` is.
+    func seedDisplayName(_ name: String) {
+        guard currentUser.displayName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        setDisplayName(name)
+    }
+
     /// Save the "About you" details onto the current user's profile (design 20a/b).
     /// Persisted locally; the name still flows to the partner via `memberNames`.
     func updateProfile(name: String, birthday: Date?, city: String?,

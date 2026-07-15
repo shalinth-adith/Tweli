@@ -9,12 +9,16 @@ import SwiftUI
 
 struct RoomSetupView: View {
     @EnvironmentObject private var auth: AuthService
+    @EnvironmentObject private var couple: CoupleSpaceService
 
     enum Route: Hashable { case create, join }
     @State private var path: [Route] = []
 
     private var firstName: String {
-        auth.displayName.split(separator: " ").first.map(String.init) ?? "there"
+        // The user's own name (edited on "About you") is the source of truth;
+        // fall back to the Apple name only if they never set one.
+        let name = couple.currentUser.displayName.isEmpty ? auth.displayName : couple.currentUser.displayName
+        return name.split(separator: " ").first.map(String.init) ?? "there"
     }
 
     var body: some View {
