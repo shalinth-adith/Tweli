@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Join on Tweli</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      min-height: 100dvh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+      padding: 32px 24px;
+      background: linear-gradient(170deg, #FFFFFF 0%, #F4F3FF 62%, #FFEFF2 100%);
+      color: #000;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: linear-gradient(170deg,#16112A 0%,#0D0A16 60%,#160B12 100%); color: #fff; }
+      .card { background: #1C1C1E !important; }
+      .code { color: #fff !important; }
+      .muted { color: #98989F !important; }
+    }
+    .logo { width: 56px; height: 56px; margin-bottom: 24px; }
+    h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.6px; }
+    .sub { font-size: 16px; color: #8A8A8E; margin-top: 10px; max-width: 300px; line-height: 1.45; }
+    .muted { color: #8A8A8E; }
+    .card {
+      margin-top: 30px; background: #fff; border-radius: 18px;
+      padding: 18px 26px; box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+    .label { font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #8A8A8E; }
+    .code {
+      font-family: ui-monospace, "SF Mono", monospace; font-size: 34px; font-weight: 800;
+      letter-spacing: 4px; margin-top: 6px; color: #000;
+    }
+    .btn {
+      display: inline-block; margin-top: 28px; text-decoration: none;
+      font-size: 17px; font-weight: 700; color: #fff;
+      padding: 16px 34px; border-radius: 17px;
+      background: linear-gradient(135deg, #5E5CE6 0%, #FF2D55 100%);
+      box-shadow: 0 10px 26px rgba(255,45,85,0.32);
+    }
+    .hint { margin-top: 18px; font-size: 13px; color: #AEAEB2; max-width: 320px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <svg class="logo" viewBox="0 0 24 24" fill="none">
+    <defs><linearGradient id="g" x1="4" y1="19" x2="20" y2="5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5E5CE6"/><stop offset="1" stop-color="#FF2D55"/></linearGradient></defs>
+    <path d="M5 18 C 9.5 8.5, 14.5 15.5, 19 6" stroke="url(#g)" stroke-width="1.6" stroke-linecap="round"/>
+    <circle cx="5" cy="18" r="2.7" fill="#5E5CE6"/><circle cx="19" cy="6" r="2.7" fill="#FF2D55"/>
+  </svg>
+
+  <h1>Your person invited you</h1>
+  <p class="sub">Join them on Tweli — one shared space for the two of you.</p>
+
+  <div class="card">
+    <div class="label">Your invite code</div>
+    <div class="code" id="code">— — —</div>
+  </div>
+
+  <a class="btn" id="cta" href="#">Get Tweli</a>
+  <p class="hint">Already have Tweli? Open it, tap <b>Join a space</b>, and enter the code above.</p>
+
+  <script>
+    // If Tweli is installed, iOS opens the app directly and this page is never
+    // seen. It only shows when the app is missing — so point people to install.
+    var params = new URLSearchParams(location.search);
+    var code = (params.get('code') || '').toUpperCase();
+    if (code) {
+      var pretty = code.length === 6 ? code.slice(0,3) + '-' + code.slice(3) : code;
+      document.getElementById('code').textContent = pretty;
+    }
+    // TODO: replace with the real App Store / TestFlight link once available.
+    document.getElementById('cta').href = 'https://apps.apple.com/app/tweli';
+  </script>
+</body>
+</html>

@@ -36,7 +36,16 @@ struct JoinSpaceView: View {
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear { app.joinError = nil; focused = true }
+        .onAppear {
+            app.joinError = nil
+            // Pre-fill a code delivered by an invite link (universal or tweli://).
+            if let pending = app.pendingJoinCode {
+                code = pending
+                app.pendingJoinCode = nil
+            } else {
+                focused = true
+            }
+        }
         .onChange(of: code) { _, _ in app.joinError = nil }
     }
 

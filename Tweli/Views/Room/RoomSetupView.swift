@@ -10,6 +10,7 @@ import SwiftUI
 struct RoomSetupView: View {
     @EnvironmentObject private var auth: AuthService
     @EnvironmentObject private var couple: CoupleSpaceService
+    @EnvironmentObject private var app: AppViewModel
 
     enum Route: Hashable { case create, join }
     @State private var path: [Route] = []
@@ -60,6 +61,12 @@ struct RoomSetupView: View {
                 case .join: JoinSpaceView(onSwitchToCreate: { path = [.create] })
                 }
             }
+        }
+        // An invite link (tapped or pasted) routes straight to Join a space, where
+        // the code pre-fills. Handles the link arriving before OR after this screen.
+        .onAppear { if app.pendingJoinCode != nil, path.isEmpty { path = [.join] } }
+        .onChange(of: app.pendingJoinCode) { _, code in
+            if code != nil, path.last != .join { path = [.join] }
         }
     }
 

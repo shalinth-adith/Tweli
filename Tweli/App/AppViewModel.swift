@@ -32,13 +32,18 @@ final class AppViewModel: ObservableObject {
     @Published var requestedTab: Int?
     @Published var focusMoodMessage = false
 
+    /// A pairing code delivered by an invite link (universal https link or the
+    /// tweli:// scheme). Stashed here so it survives sign-in / "About you" and
+    /// pre-fills the Join a space screen once the user reaches it.
+    @Published var pendingJoinCode: String?
+
     /// Set while a pairing code is being redeemed / after it fails, so Join UIs
     /// can show progress and a friendly error.
     @Published var redeemingCode = false
     @Published var joinError: String?
 
-    /// Handle a tweli:// deep link (widget "Send love", or an invite code link —
-    /// tweli://join?code=7GK4PB auto-redeems and pops the confirm-join sheet).
+    /// Handle a tweli:// deep link (widget "Send love", or an invite —
+    /// tweli://join?code=7GK4PB → land on Join a space with the code filled).
     func handleDeepLink(_ url: URL) {
         guard url.scheme == "tweli" else { return }
         switch url.host {
@@ -46,13 +51,28 @@ final class AppViewModel: ObservableObject {
             requestedTab = 3            // Moods tab
             focusMoodMessage = true
         case "join":
-            let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                .queryItems?.first(where: { $0.name == "code" })?.value ?? ""
-            guard !code.isEmpty else { return }
-            Task { await joinWithCode(code) }
+            applyInvite(from: url)
         default:
             break
         }
+    }
+
+    /// Handle an incoming Universal Link (https://<host>/join?code=…) — the
+    /// tappable invite. iOS delivers it as a browsing NSUserActivity.
+    func handleUserActivity(_ activity: NSUserActivity) {
+        guard activity.activityType == NSUserActivityTypeBrowsingWeb,
+              let url = activity.webpageURL else { return }
+        if url.path.hasPrefix("/join") { applyInvite(from: url) }
+    }
+
+    /// Extract a `code` from any invite URL and stash it so it pre-fills the Join
+    /// a space screen once the user is past sign-in / "About you".
+    private func applyInvite(from url: URL) {
+        guard let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "code" })?.value else { return }
+        let code = FirebaseService.normalizePairCode(raw)
+        guard code.count == 6 else { return }
+        pendingJoinCode = code
     }
 
     /// Redeem a pairing code → invite metadata → the confirm-join sheet. Used by the

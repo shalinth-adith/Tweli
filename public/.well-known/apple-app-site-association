@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["649T62WKAQ.me.adithyan.shalinth.Tweli"],
+        "components": [
+          { "/": "/join*", "comment": "Invite links open the Join a space screen" }
+        ]
+      }
+    ]
+  }
+}

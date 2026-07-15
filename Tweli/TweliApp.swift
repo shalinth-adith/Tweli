@@ -23,7 +23,8 @@ struct TweliApp: App {
                         Task { await app.cloud.updateFCMToken(token) }
                     }
                 }
-                .onOpenURL { app.handleDeepLink($0) }   // widget "Send love" deep link
+                .onOpenURL { app.handleDeepLink($0) }   // tweli:// scheme (widget, invite)
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { app.handleUserActivity($0) }  // https invite link
                 .environmentObject(app)
                 .environmentObject(app.auth)
                 .environmentObject(app.coupleSpaceService)

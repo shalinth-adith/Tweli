@@ -34,11 +34,15 @@ struct CreateSpaceView: View {
     }
     private var youInitial: String { couple.currentUser.initials }
 
+    /// Tappable universal link — opens Tweli straight to Join with the code
+    /// filled (or the App Store if they don't have Tweli yet).
+    private var inviteLink: String { "https://tweli-9a99e.web.app/join?code=\(pairCode)" }
+
     private var shareMessage: String {
         var lines = ["💞 Join me on Tweli!"]
         if !pairCode.isEmpty {
-            lines.append("\nOpen Tweli ▸ Join a space ▸ enter code: \(displayCode)")
-            lines.append("\nOr tap: tweli://join?code=\(pairCode)")
+            lines.append("\nTap to join us: \(inviteLink)")
+            lines.append("\nOr open Tweli ▸ Join a space ▸ enter code: \(displayCode)")
         }
         return lines.joined(separator: "\n")
     }
