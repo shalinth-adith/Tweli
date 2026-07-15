@@ -26,10 +26,9 @@ final class ReminderService: ObservableObject {
     init(notifications: ReminderNotificationService, cloud: FirebaseService) {
         self.notifications = notifications
         self.cloud = cloud
-#if DEBUG
-        self.reminders = MockData.reminders   // demo data for design/dev builds only
-#else
         self.reminders = []
+#if DEBUG
+        if AppEnvironment.useDemoData { self.reminders = MockData.reminders }
 #endif
     }
 

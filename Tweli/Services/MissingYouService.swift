@@ -19,10 +19,9 @@ final class MissingYouService: ObservableObject {
 
     init(cloud: FirebaseService) {
         self.cloud = cloud
-#if DEBUG
-        self.pings = MockData.pings   // demo data for design/dev builds only
-#else
         self.pings = []
+#if DEBUG
+        if AppEnvironment.useDemoData { self.pings = MockData.pings }
 #endif
     }
 

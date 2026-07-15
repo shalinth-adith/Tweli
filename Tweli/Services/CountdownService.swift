@@ -18,10 +18,9 @@ final class CountdownService: ObservableObject {
     init(cloud: FirebaseService, notifications: ReminderNotificationService) {
         self.cloud = cloud
         self.notifications = notifications
-#if DEBUG
-        self.countdowns = MockData.countdowns   // demo data for design/dev builds only
-#else
         self.countdowns = []
+#if DEBUG
+        if AppEnvironment.useDemoData { self.countdowns = MockData.countdowns }
 #endif
     }
 

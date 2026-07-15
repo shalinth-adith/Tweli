@@ -28,11 +28,11 @@ final class CoupleSpaceService: ObservableObject {
         if let saved = Self.load(UserProfile.self, userKey, defaults) {
             self.currentUser = saved
         } else {
+            var seeded = UserProfile(displayName: "", avatarEmoji: "💛")
 #if DEBUG
-            self.currentUser = MockData.shalinth
-#else
-            self.currentUser = UserProfile(displayName: "", avatarEmoji: "💛")
+            if AppEnvironment.useDemoData { seeded = MockData.shalinth }
 #endif
+            self.currentUser = seeded
         }
 
         // Restore the real space + partner if setup was completed on this device.
@@ -40,8 +40,10 @@ final class CoupleSpaceService: ObservableObject {
             var space = Self.load(CoupleSpace.self, spaceKey, defaults)
             var restoredPartner = Self.load(UserProfile.self, partnerKey, defaults)
 #if DEBUG
-            if space == nil { space = MockData.coupleSpace }       // populate dev builds
-            if restoredPartner == nil { restoredPartner = MockData.anaya }
+            if AppEnvironment.useDemoData {
+                if space == nil { space = MockData.coupleSpace }
+                if restoredPartner == nil { restoredPartner = MockData.anaya }
+            }
 #endif
             self.coupleSpace = space
             self.partner = restoredPartner

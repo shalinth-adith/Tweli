@@ -114,10 +114,17 @@ struct SignInView: View {
                 .padding(.top, 2)
 
 #if DEBUG
-            Button("Continue in dev mode") { auth.devSignIn() }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
+            // Developer-only. Absent from every distribution build. Enabling demo
+            // data takes effect on the next launch (services seed at init).
+            HStack(spacing: 16) {
+                Button("Dev sign-in") { auth.devSignIn() }
+                Button("Dev sign-in + demo data") {
+                    AppEnvironment.enableDemoData(); auth.devSignIn()
+                }
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(.top, 4)
 #endif
         }
         .opacity(appear ? 1 : 0)

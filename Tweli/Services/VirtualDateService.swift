@@ -18,10 +18,9 @@ final class VirtualDateService: ObservableObject {
     init(cloud: FirebaseService, notifications: ReminderNotificationService) {
         self.cloud = cloud
         self.notifications = notifications
-#if DEBUG
-        self.dates = MockData.virtualDates   // demo data for design/dev builds only
-#else
         self.dates = []
+#if DEBUG
+        if AppEnvironment.useDemoData { self.dates = MockData.virtualDates }
 #endif
     }
 

@@ -16,10 +16,9 @@ final class OpenWhenLetterService: ObservableObject {
 
     init(cloud: FirebaseService) {
         self.cloud = cloud
-#if DEBUG
-        self.letters = MockData.letters   // demo data for design/dev builds only
-#else
         self.letters = []
+#if DEBUG
+        if AppEnvironment.useDemoData { self.letters = MockData.letters }
 #endif
     }
 
