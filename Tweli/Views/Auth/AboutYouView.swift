@@ -15,6 +15,11 @@ struct AboutYouView: View {
     @EnvironmentObject private var app: AppViewModel
     @EnvironmentObject private var couple: CoupleSpaceService
     @EnvironmentObject private var auth: AuthService
+    @Environment(\.dismiss) private var dismiss
+
+    /// When true, the screen is opened from Settings to edit an existing profile
+    /// (Cancel/Save + dismiss) instead of the first-run onboarding step.
+    var isEditing = false
 
     @State private var name = ""
     @State private var birthday: Date? = nil
@@ -90,8 +95,11 @@ struct AboutYouView: View {
                 .padding(.horizontal, 22).padding(.bottom, 20)
             }
 
-            BrandCTA(title: "Continue") { save(); app.finishAboutYou() }
-                .padding(.horizontal, 20).padding(.bottom, 20)
+            BrandCTA(title: isEditing ? "Save" : "Continue", showsArrow: !isEditing) {
+                save()
+                if isEditing { dismiss() } else { app.finishAboutYou() }
+            }
+            .padding(.horizontal, 20).padding(.bottom, 20)
         }
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .onAppear {
@@ -112,17 +120,31 @@ struct AboutYouView: View {
 
     private var topBar: some View {
         HStack {
-            Color.clear.frame(width: 44, height: 34)
-            Spacer()
-            HStack(spacing: 6) {
-                Capsule().fill(Brand.pink).frame(width: 22, height: 6)
-                Capsule().fill(Color.primary.opacity(0.18)).frame(width: 6, height: 6)
-                Capsule().fill(Color.primary.opacity(0.18)).frame(width: 6, height: 6)
+            if isEditing {
+                Button("Cancel") { dismiss() }
+                    .font(.system(size: 15)).foregroundStyle(.secondary)
+                    .frame(width: 60, height: 34, alignment: .leading)
+            } else {
+                Color.clear.frame(width: 60, height: 34)
             }
             Spacer()
-            Button("Skip") { save(); app.finishAboutYou() }
-                .font(.system(size: 15)).foregroundStyle(.secondary)
-                .frame(width: 44, height: 34, alignment: .trailing)
+            if !isEditing {
+                HStack(spacing: 6) {
+                    Capsule().fill(Brand.pink).frame(width: 22, height: 6)
+                    Capsule().fill(Color.primary.opacity(0.18)).frame(width: 6, height: 6)
+                    Capsule().fill(Color.primary.opacity(0.18)).frame(width: 6, height: 6)
+                }
+            } else {
+                Text("Edit profile").font(.system(size: 16, weight: .semibold))
+            }
+            Spacer()
+            if !isEditing {
+                Button("Skip") { save(); app.finishAboutYou() }
+                    .font(.system(size: 15)).foregroundStyle(.secondary)
+                    .frame(width: 60, height: 34, alignment: .trailing)
+            } else {
+                Color.clear.frame(width: 60, height: 34)
+            }
         }
         .padding(.horizontal, 20).padding(.top, 8)
     }

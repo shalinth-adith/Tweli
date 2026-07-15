@@ -80,7 +80,7 @@ struct JoiningView: View {
                 .scaleEffect(appear ? 1 : 0.6)
 
             HStack(spacing: 0) {
-                AvatarBubble(initial: youInitial, isPartner: false, size: 66)
+                ProfileAvatar(profile: couple.currentUser, isPartner: false, size: 66)
                     .zIndex(1)
 
                 JoiningThread()

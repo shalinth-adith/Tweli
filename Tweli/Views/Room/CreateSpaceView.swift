@@ -139,7 +139,7 @@ struct CreateSpaceView: View {
 
     private var pairingHero: some View {
         HStack(spacing: 0) {
-            AvatarBubble(initial: youInitial, isPartner: false, size: 58)
+            ProfileAvatar(profile: couple.currentUser, isPartner: false, size: 58)
             Image(systemName: "ellipsis")
                 .font(.title3).foregroundStyle(.tertiary)
                 .padding(.horizontal, 10)

@@ -12,8 +12,19 @@ struct SettingsView: View {
     @EnvironmentObject private var couple: CoupleSpaceService
     @EnvironmentObject private var notifications: ReminderNotificationService
 
+    @State private var editingProfile = false
+
     var body: some View {
         Form {
+            Section {
+                Button { editingProfile = true } label: { profileRow }
+                    .buttonStyle(.plain)
+            } header: {
+                Text("You")
+            } footer: {
+                Text("Your partner sees your name, birthday and local time.")
+            }
+
             Section("Connection") {
                 row("person.2.fill", "Partner", couple.partner?.displayName ?? "Not connected", .twAccent)
                 row("arrow.triangle.2.circlepath", "Sync", syncStatusText, .twAccent2)
@@ -56,6 +67,12 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { notifications.refreshAuthorizationStatus() }
+        .sheet(isPresented: $editingProfile) {
+            AboutYouView(isEditing: true)
+                .environmentObject(app)
+                .environmentObject(couple)
+                .environmentObject(auth)
+        }
     }
 
     /// Real sync state (replaces the retired "iCloud sync — On (mock)" row):
@@ -65,6 +82,32 @@ struct SettingsView: View {
     private var syncStatusText: String {
         if couple.coupleSpace == nil { return "Not connected" }
         return app.cloud.accountAvailable ? "Connected" : "Offline"
+    }
+
+    /// The tappable "You" profile summary — photo, name, and birthday/city.
+    private var profileRow: some View {
+        HStack(spacing: 14) {
+            ProfileAvatar(profile: couple.currentUser, isPartner: false, size: 56)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(couple.currentUser.displayName.isEmpty ? "Add your details" : couple.currentUser.displayName)
+                    .font(.system(size: 17, weight: .semibold)).foregroundStyle(.primary)
+                Text(profileSubtitle)
+                    .font(.system(size: 13)).foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var profileSubtitle: String {
+        var parts: [String] = []
+        if let bday = couple.currentUser.birthday {
+            parts.append(bday.formatted(.dateTime.day().month(.abbreviated)))
+        }
+        if let city = couple.currentUser.city, !city.isEmpty { parts.append(city) }
+        return parts.isEmpty ? "Tap to add photo, birthday & city" : parts.joined(separator: " · ")
     }
 
     private var notificationStatusText: String {

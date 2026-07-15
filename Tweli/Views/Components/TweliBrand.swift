@@ -184,6 +184,27 @@ struct AvatarBubble: View {
     }
 }
 
+/// A profile avatar that shows the person's photo when they have one, else the
+/// gradient initial bubble. Use everywhere the current user (or partner) is shown
+/// so a chosen "About you" photo appears consistently across the app.
+struct ProfileAvatar: View {
+    let profile: UserProfile?
+    var isPartner = false
+    var size: CGFloat = 66
+
+    var body: some View {
+        if let data = profile?.photoData, let ui = UIImage(data: data) {
+            Image(uiImage: ui)
+                .resizable().scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+                .shadow(color: (isPartner ? Brand.pink : Brand.indigo).opacity(0.3), radius: size * 0.18, y: size * 0.09)
+        } else {
+            AvatarBubble(initial: profile?.initials ?? "", isPartner: isPartner, size: size)
+        }
+    }
+}
+
 // MARK: - Gradient CTA button
 
 /// The primary gradient call-to-action (pink→indigo) used across the pairing

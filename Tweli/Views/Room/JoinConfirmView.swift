@@ -40,7 +40,7 @@ struct JoinConfirmView: View {
                 Image(systemName: "ellipsis")
                     .font(.title3).foregroundStyle(.tertiary)
                     .padding(.horizontal, 10)
-                AvatarBubble(initial: app.currentUser.initials, isPartner: false, size: 58)
+                ProfileAvatar(profile: app.currentUser, isPartner: false, size: 58)
             }
 
             VStack(spacing: 8) {
