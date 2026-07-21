@@ -116,7 +116,7 @@ struct AboutYouView: View {
         .sheet(isPresented: $showBirthdaySheet) { birthdaySheet }
     }
 
-    // MARK: - Top bar (progress + skip)
+    // MARK: - Top bar (skip / edit title)
 
     private var topBar: some View {
         HStack {
@@ -128,13 +128,7 @@ struct AboutYouView: View {
                 Color.clear.frame(width: 60, height: 34)
             }
             Spacer()
-            if !isEditing {
-                HStack(spacing: 6) {
-                    Capsule().fill(Brand.pink).frame(width: 22, height: 6)
-                    Capsule().fill(Color.primary.opacity(0.18)).frame(width: 6, height: 6)
-                    Capsule().fill(Color.primary.opacity(0.18)).frame(width: 6, height: 6)
-                }
-            } else {
+            if isEditing {
                 Text("Edit profile").font(.system(size: 16, weight: .semibold))
             }
             Spacer()

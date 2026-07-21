@@ -13,12 +13,23 @@ struct HomeMomentView: View {
     @EnvironmentObject private var app: AppViewModel
     @EnvironmentObject private var moods: MoodService
     @EnvironmentObject private var reminders: ReminderService
+    @EnvironmentObject private var countdowns: CountdownService
+
+    @State private var showMeetSheet = false
 
     var body: some View {
         VStack(spacing: 16) {
             moodMoment
             remindersCard
         }
+        .sheet(isPresented: $showMeetSheet) { MeetDateSheetView() }
+#if DEBUG
+        // Verification hook: TWELI_MEET_SHEET=1 auto-opens the "When do you meet?"
+        // sheet so a headless simulator can screenshot it (no touch injection).
+        .onAppear {
+            if ProcessInfo.processInfo.environment["TWELI_MEET_SHEET"] == "1" { showMeetSheet = true }
+        }
+#endif
     }
 
     // MARK: - Partner's mood (static resting card — the swipe lives on the interstitial)
@@ -29,9 +40,16 @@ struct HomeMomentView: View {
                 mood: mood,
                 partnerName: app.partner?.displayName ?? "Your partner",
                 partnerInitials: app.partner?.initials ?? "?",
-                onTap: { app.requestedTab = 3 }   // open the Moods tab
+                daysRemaining: reunionDays,
+                onTap: { app.requestedTab = 3 },          // open the Moods tab
+                onCountdownTap: { showMeetSheet = true }   // open "When do you meet?"
             )
         }
+    }
+
+    /// Days until the reunion — the pinned "meeting" countdown, else the soonest pinned.
+    private var reunionDays: Int? {
+        (countdowns.countdowns.first { $0.category == .meeting } ?? countdowns.pinned)?.daysRemaining
     }
 
     // MARK: - Today's reminders (checkable)

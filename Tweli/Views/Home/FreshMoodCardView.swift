@@ -4,9 +4,9 @@
 //
 //  The partner's mood as it rests on Home (designs 21a/b — light/dark). This is
 //  the calm state you land on AFTER the full-screen "new mood" interstitial
-//  (MoodInterstitialView, designs 22a/b) is swiped away. It is a static, tappable
-//  card — NOT swipeable; the swipe lives on the interstitial. Tapping opens the
-//  Moods tab.
+//  (MoodInterstitialView, designs 22a/b) is swiped away. It is static — NOT
+//  swipeable. Two tap targets: the ❤️ N-days chip opens the "When do you meet?"
+//  sheet; tapping anywhere else opens the Moods tab.
 //
 
 import SwiftUI
@@ -15,14 +15,19 @@ struct FreshMoodCardView: View {
     let mood: MoodStatus
     let partnerName: String
     let partnerInitials: String
-    /// Tap — open the Moods tab.
+    /// Days until the reunion (nil ⇒ no meet date set yet → chip prompts to add one).
+    let daysRemaining: Int?
+    /// Tap the card body — open the Moods tab.
     var onTap: () -> Void
+    /// Tap the ❤️ chip — open the "When do you meet?" sheet.
+    var onCountdownTap: () -> Void
 
     @State private var pulsing = false
 
     var body: some View {
-        Button(action: onTap) { card }
-            .buttonStyle(.plain)
+        card
+            .contentShape(Rectangle())
+            .onTapGesture { onTap() }
             .onAppear {
                 withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                     pulsing = true
@@ -51,7 +56,7 @@ struct FreshMoodCardView: View {
         .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 1)
     }
 
-    // MARK: - Header ("Just updated · now" + tap hint)
+    // MARK: - Header ("Just updated · now" + ❤️ days chip)
 
     private var header: some View {
         HStack(spacing: 8) {
@@ -65,12 +70,28 @@ struct FreshMoodCardView: View {
                 .textCase(.uppercase)
                 .kerning(0.7)
                 .foregroundStyle(Color.twAccent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             Spacer(minLength: 4)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .heavy))
-                .foregroundStyle(.tertiary)
+            countdownChip
         }
         .padding(.bottom, 13)
+    }
+
+    private var countdownChip: some View {
+        Button(action: onCountdownTap) {
+            HStack(spacing: 4) {
+                Text("❤️").font(.system(size: 12))
+                Text(daysRemaining.map { "\($0) days" } ?? "Set date")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundStyle(Color.twAccent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.twAccent.opacity(0.1))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Body (avatar + mood + note)
@@ -112,7 +133,7 @@ struct FreshMoodCardView: View {
     private var footer: some View {
         HStack(spacing: 6) {
             Image(systemName: "lock.fill").font(.system(size: 11, weight: .semibold))
-            Text("Only you — they won't know you saw this")
+            Text("Thinking of you across the miles ♡")
                 .font(.system(size: 11.5, weight: .semibold))
         }
         .foregroundStyle(.tertiary)
