@@ -16,6 +16,11 @@ final class MoodService: ObservableObject {
     var onDataChanged: (() -> Void)?
     private let cloud: FirebaseService
 
+    /// Persists the timestamp of the partner mood the user has already been
+    /// greeted with, so the "new mood" interstitial shows once per fresh mood.
+    private let defaults = UserDefaults.standard
+    private let lastSeenPartnerMoodKey = "tweli.mood.lastSeenPartner"
+
     init(cloud: FirebaseService) {
         self.cloud = cloud
         self.moods = []
@@ -29,6 +34,30 @@ final class MoodService: ObservableObject {
 
     var myMood: MoodStatus? { moods.first { $0.userId == currentUserId } }
     var partnerMood: MoodStatus? { moods.first { $0.userId == partnerId } }
+
+    /// The partner's mood only if they've *changed* it since we last recorded a
+    /// baseline — this is what raises the "New mood" interstitial.
+    ///
+    /// The very first partner mood we ever observe is recorded silently as the
+    /// baseline and returns nil: the card must not greet a first-time user (or
+    /// the mood that was already there when they paired). Only a genuinely newer
+    /// update afterwards returns non-nil.
+    var freshPartnerMood: MoodStatus? {
+        guard let mood = partnerMood else { return nil }
+        guard let lastSeen = defaults.object(forKey: lastSeenPartnerMoodKey) as? Date else {
+            // First partner mood ever seen → establish the baseline, don't greet.
+            defaults.set(mood.updatedAt, forKey: lastSeenPartnerMoodKey)
+            return nil
+        }
+        return mood.updatedAt > lastSeen ? mood : nil
+    }
+
+    /// Mark the current partner mood as seen. The strip stays on Home, but the
+    /// interstitial won't raise again until a newer mood arrives.
+    func acknowledgePartnerMood() {
+        guard let mood = partnerMood else { return }
+        defaults.set(mood.updatedAt, forKey: lastSeenPartnerMoodKey)
+    }
 
     /// Partner's mood across the last 7 days (oldest → newest) for the history bar.
     /// Empty in production; demo data only when a developer opts in.

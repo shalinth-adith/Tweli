@@ -14,10 +14,14 @@ struct PartnerSpaceView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                coupleHeader
-                statsRow
-                if let cd = countdowns.pinned { sharedCountdown(cd) }
-                connectionCard
+                if couple.partner != nil {
+                    coupleHeader
+                    statsRow
+                    if let cd = countdowns.pinned { sharedCountdown(cd) }
+                    connectionCard
+                } else {
+                    waitingState
+                }
             }
             .padding(TweliMetrics.screenPadding)
         }
@@ -25,6 +29,8 @@ struct PartnerSpaceView: View {
         .navigationTitle("Partner Space")
         .navigationBarTitleDisplayMode(.inline)
     }
+
+    // MARK: - Paired state
 
     private var coupleHeader: some View {
         VStack(spacing: 12) {
@@ -34,8 +40,10 @@ struct PartnerSpaceView: View {
             }
             Text(couple.coupleSpace?.title ?? "Our Space")
                 .font(.title2.weight(.bold))
-            Text("Together since \(couple.coupleSpace?.createdAt.formatted(date: .abbreviated, time: .omitted) ?? "")")
-                .font(.caption).foregroundStyle(.secondary)
+            if let since = couple.coupleSpace?.createdAt {
+                Text("Together since \(since.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 8)
@@ -47,12 +55,22 @@ struct PartnerSpaceView: View {
             .overlay(Circle().strokeBorder(Color.twBackground, lineWidth: 3))
     }
 
+    /// Only real, derivable numbers here — no invented streaks.
     private var statsRow: some View {
         HStack(spacing: 12) {
             statTile("\(reminders.reminders.count)", "Shared reminders", .twAccent2)
             statTile("\(reminders.today.filter { $0.isCompleted }.count)", "Done today", .twSuccess)
-            statTile("7", "Day streak", .twAccent)
+            if let days = daysTogether {
+                statTile("\(days)", "Days together", .twAccent)
+            }
         }
+    }
+
+    /// Whole days since the space was created; nil until we have that date.
+    private var daysTogether: Int? {
+        guard let since = couple.coupleSpace?.createdAt else { return nil }
+        let days = Calendar.current.dateComponents([.day], from: since, to: Date()).day ?? 0
+        return max(0, days)
     }
 
     private func statTile(_ value: String, _ label: String, _ tint: Color) -> some View {
@@ -65,17 +83,24 @@ struct PartnerSpaceView: View {
         .tweliCard()
     }
 
+    /// The reunion countdown, tappable into the full CountdownView. This is the
+    /// entry point to countdown management now that Home (designs 21a/b) no longer
+    /// carries the countdown card.
     private func sharedCountdown(_ cd: CountdownItem) -> some View {
-        CardView {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(cd.title).tweliEyebrow()
-                    Text("\(cd.daysRemaining) days to go").font(.headline).foregroundStyle(.primary)
+        NavigationLink(value: HomeRoute.countdown) {
+            CardView {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(cd.title).tweliEyebrow()
+                        Text("\(cd.daysRemaining) days to go").font(.headline).foregroundStyle(.primary)
+                    }
+                    Spacer()
+                    Image(systemName: cd.category.sfSymbol).font(.title2).foregroundStyle(Color.twAccent)
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                 }
-                Spacer()
-                Image(systemName: cd.category.sfSymbol).font(.title2).foregroundStyle(Color.twAccent)
             }
         }
+        .buttonStyle(.plain)
     }
 
     private var connectionCard: some View {
@@ -87,5 +112,30 @@ struct PartnerSpaceView: View {
                 Text("iCloud").font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+
+    // MARK: - Unpaired state (honest: no phantom partner, no fake "Connected")
+
+    private var waitingState: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle().fill(Color.twAccent2.opacity(0.15)).frame(width: 76, height: 76)
+                Image(systemName: couple.awaitingPartner ? "hourglass" : "heart.circle")
+                    .font(.system(size: 30)).foregroundStyle(Color.twAccent2)
+            }
+            .padding(.top, 24)
+
+            Text(couple.awaitingPartner ? "Waiting for your partner" : "No partner yet")
+                .font(.title3.weight(.bold)).foregroundStyle(.primary)
+
+            Text(couple.awaitingPartner
+                 ? "They'll appear here the moment they open your invite."
+                 : "Invite your partner from Settings to start sharing your space.")
+                .font(.subheadline).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity)
     }
 }

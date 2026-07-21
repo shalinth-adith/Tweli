@@ -38,4 +38,34 @@ enum AppEnvironment {
     static func disableDemoData() {
         UserDefaults.standard.set(false, forKey: demoKey)
     }
+
+#if DEBUG
+    /// Verification hook (DEBUG only, absent from distribution builds). When the
+    /// app is launched with `TWELI_DEMO=1` in its environment — e.g.
+    /// `SIMCTL_CHILD_TWELI_DEMO=1 xcrun simctl launch …` — seed the fully
+    /// connected demo state so a headless build boots straight to Home instead of
+    /// onboarding (which needs taps the CI simulator can't perform). Add
+    /// `TWELI_FRESH_MOOD=1` to also surface the inline fresh-mood card by clearing
+    /// the acknowledged baseline. Must run before any service reads UserDefaults,
+    /// so call it from `TweliApp.init()`.
+    static func applyLaunchOverridesIfNeeded() {
+        let env = ProcessInfo.processInfo.environment
+        guard env["TWELI_DEMO"] == "1" else { return }
+        let d = UserDefaults.standard
+        d.set(true, forKey: demoKey)                        // seed MockData
+        d.set(true, forKey: "tweli.aboutYouDone")           // skip "About you"
+        d.set(true, forKey: "tweli.roomSetupComplete")      // pre-connected space
+        if d.string(forKey: "tweli.auth.appleUserId") == nil {
+            d.set("dev-\(UUID().uuidString)", forKey: "tweli.auth.appleUserId")
+        }
+        // Fresh → clear the baseline so the interstitial raises over Home;
+        // otherwise mark the mock mood already seen so Home shows the calm
+        // resting card with no interstitial.
+        if env["TWELI_FRESH_MOOD"] == "1" {
+            d.set(Date(timeIntervalSince1970: 0), forKey: "tweli.mood.lastSeenPartner")
+        } else {
+            d.set(Date(), forKey: "tweli.mood.lastSeenPartner")
+        }
+    }
+#endif
 }

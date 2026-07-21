@@ -13,6 +13,14 @@ struct TweliApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var app = AppViewModel()
 
+    init() {
+#if DEBUG
+        // Seed the connected demo state when launched with TWELI_DEMO=1, before
+        // the AppViewModel's services read UserDefaults. No-op otherwise.
+        AppEnvironment.applyLaunchOverridesIfNeeded()
+#endif
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

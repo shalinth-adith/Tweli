@@ -32,6 +32,28 @@ final class AppViewModel: ObservableObject {
     @Published var requestedTab: Int?
     @Published var focusMoodMessage = false
 
+    /// The partner's fresh mood, shown as the inline swipeable card on Home
+    /// (designs 21a/b). Non-nil ⇒ the card is up; nil ⇒ Home shows the quiet strip.
+    @Published var freshMood: MoodStatus?
+
+    /// Reveal the fresh-mood card only when two people are connected AND the
+    /// partner *changed* their mood since we last saw it. Never on first launch or
+    /// for a baseline mood — see `MoodService.freshPartnerMood`. Called when Home
+    /// appears / the app returns to foreground. Silent — sends nothing.
+    func revealFreshMoodIfAny() {
+        guard freshMood == nil, partner != nil else { return }
+        guard let fresh = moodService.freshPartnerMood else { return }
+        freshMood = fresh
+    }
+
+    /// Dismiss the fresh-mood card. Acknowledges the mood (so it won't re-raise)
+    /// and collapses to the strip; a right swipe additionally opens the Moods tab.
+    func dismissFreshMood(openMoods: Bool) {
+        moodService.acknowledgePartnerMood()
+        freshMood = nil
+        if openMoods { requestedTab = 3 }
+    }
+
     /// A pairing code delivered by an invite link (universal https link or the
     /// tweli:// scheme). Stashed here so it survives sign-in / "About you" and
     /// pre-fills the Join a space screen once the user reaches it.

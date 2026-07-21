@@ -129,7 +129,7 @@ enum MockData {
 
     static var moods: [MoodStatus] {
         [
-            MoodStatus(userId: anayaId, mood: .missingYou, note: nil, updatedAt: Date().addingTimeInterval(-7200)),
+            MoodStatus(userId: anayaId, mood: .missingYou, note: "Wish you were here right now. Counting down with you.", updatedAt: Date().addingTimeInterval(-7200)),
             MoodStatus(userId: shalinthId, mood: .excitedToMeet, note: nil, updatedAt: Date().addingTimeInterval(-3600))
         ]
     }

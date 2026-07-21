@@ -21,15 +21,22 @@ struct MoodSharingView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                NavigationLink(value: MoodTarget.partner) {
-                    meter(title: "\(app.partner?.displayName ?? "Partner")'s mood",
-                          initials: app.partner?.initials ?? "A",
-                          background: .twAccentSoft, accent: .twAccent,
-                          mood: service.partnerMood?.mood,
-                          updated: service.partnerMood?.relativeLabel,
-                          week: service.partnerWeekMoods)
+                // Partner's meter only exists once someone has actually joined —
+                // before that we show an honest invite prompt, never a blank
+                // "Partner · Not set" shell.
+                if let partner = app.partner {
+                    NavigationLink(value: MoodTarget.partner) {
+                        meter(title: "\(partner.displayName)'s mood",
+                              initials: partner.initials,
+                              background: .twAccentSoft, accent: .twAccent,
+                              mood: service.partnerMood?.mood,
+                              updated: service.partnerMood?.relativeLabel,
+                              week: service.partnerWeekMoods)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    partnerInvitePrompt
                 }
-                .buttonStyle(.plain)
 
                 NavigationLink(value: MoodTarget.me) {
                     meter(title: "Your mood",
@@ -55,6 +62,28 @@ struct MoodSharingView: View {
         .onChange(of: app.focusMoodMessage) { _, focus in
             if focus { messageFocused = true; app.focusMoodMessage = false }
         }
+    }
+
+    // MARK: - Solo invite prompt (shown in place of the partner meter)
+
+    private var partnerInvitePrompt: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(Color.twAccent.opacity(0.15)).frame(width: 44, height: 44)
+                Image(systemName: "heart.circle").foregroundStyle(Color.twAccent).font(.title3)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("No partner yet").tweliEyebrow(.twAccent)
+                Text("Once your partner joins, you'll see how they're feeling here.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.twAccentSoft)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     // MARK: - Reusable mood meter card

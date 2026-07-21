@@ -41,3 +41,6 @@ fastlane/screenshots
 
 # Firebase config — contains API key; obtain from Firebase console
 GoogleService-Info.plist
+
+# Firebase CLI local deploy cache
+.firebase/

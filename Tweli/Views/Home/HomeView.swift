@@ -28,6 +28,7 @@ struct HomeView: View {
         }
         .background(Color.twBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear { app.revealFreshMoodIfAny() }
         .navigationDestination(for: HomeRoute.self) { route in
             switch route {
             case .countdown: CountdownView()
@@ -40,11 +41,17 @@ struct HomeView: View {
 
     // MARK: - Header
 
+    /// "Tuesday · good evening" — weekday + the time-of-day greeting (designs 21a/b).
+    private var dayGreeting: String {
+        let weekday = Date().formatted(.dateTime.weekday(.wide))
+        return "\(weekday) · \(app.greeting.lowercased())"
+    }
+
     private var header: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(app.greeting)
-                    .font(.subheadline)
+                Text(dayGreeting)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Text(app.currentUser.displayName)
                     .font(.system(size: 28, weight: .bold))
