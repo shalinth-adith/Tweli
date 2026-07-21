@@ -80,7 +80,7 @@ service cloud.firestore {
         // Restrict to the six known subcollections; reject anything else.
         function isKnownItemType() {
           return itemType in
-            ['reminders','countdowns','letters','virtualDates','moods','pings'];
+            ['reminders','countdowns','letters','virtualDates','moods','pings','locations'];
         }
 
         function validItem() {

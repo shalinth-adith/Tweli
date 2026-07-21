@@ -54,8 +54,12 @@ struct MainTabView: View {
             if let tab = newValue { selection = tab; app.requestedTab = nil }
         }
         .onChange(of: scenePhase) { _, phase in
-            // Returning to the foreground can surface a mood posted while away.
-            if phase == .active { app.revealFreshMoodIfAny() }
+            // Returning to the foreground can surface a mood posted while away, and
+            // is our once-an-hour trigger to refresh our own shared location.
+            if phase == .active {
+                app.revealFreshMoodIfAny()
+                app.locationService.refreshIfStale()
+            }
         }
         .onAppear {
             // Consume a deep link that arrived before this view began observing
@@ -69,6 +73,7 @@ struct MainTabView: View {
             await app.notifications.requestAuthorization()
             app.bootstrapNotifications()
             app.syncNow()   // pull any CloudKit changes for the couple space
+            app.locationService.refreshIfStale()   // refresh our shared location if stale
         }
     }
 }

@@ -41,6 +41,7 @@ struct TweliApp: App {
                 .environmentObject(app.virtualDateService)
                 .environmentObject(app.letterService)
                 .environmentObject(app.moodService)
+                .environmentObject(app.locationService)
                 .environmentObject(app.missingYouService)
                 .environmentObject(app.notifications)
                 .tint(.twAccent)

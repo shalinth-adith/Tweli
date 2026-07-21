@@ -84,6 +84,31 @@ struct TweliTests {
         let ping = MissingYouPing(message: "Miss you", sentBy: author,
                                   sentTo: UUID(), coupleSpaceId: space)
         try assertRoundTrip(ping, id: ping.id) { $0.message == "Miss you" }
+
+        let location = SharedLocation(userId: author, latitude: 51.5074, longitude: -0.1278,
+                                      cityLabel: "London")
+        try assertRoundTrip(location, id: location.id) { $0.cityLabel == "London" }
+    }
+
+    // 4 — HAPPY: the partner-distance helpers compute a sane geodesic distance and
+    // format it to a non-empty, human-readable label. Pure math — no CoreLocation
+    // permission, no service state.
+    @Test("happy: partner distance math + formatting")
+    func partnerDistanceMath() {
+        // San Francisco → New York City ≈ 4,130 km.
+        let sf = SharedLocation(userId: UUID(), latitude: 37.7749, longitude: -122.4194)
+        let nyc = SharedLocation(userId: UUID(), latitude: 40.7128, longitude: -74.0060)
+
+        let meters = LocationService.distanceMeters(from: sf, to: nyc)
+        #expect(meters > 4_000_000 && meters < 4_300_000)
+
+        // Same point → zero distance.
+        #expect(LocationService.distanceMeters(from: sf, to: sf) < 1)
+
+        // Formatted label is non-empty and contains a number (km or mi per locale).
+        let label = LocationService.distanceLabel(meters: meters)
+        #expect(!label.isEmpty)
+        #expect(label.contains { $0.isNumber })
     }
 
     /// Encodes a model to a JSON string (as FirebaseService stores it), decodes it

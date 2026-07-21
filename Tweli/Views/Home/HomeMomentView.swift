@@ -14,6 +14,7 @@ struct HomeMomentView: View {
     @EnvironmentObject private var moods: MoodService
     @EnvironmentObject private var reminders: ReminderService
     @EnvironmentObject private var countdowns: CountdownService
+    @EnvironmentObject private var location: LocationService
 
     @State private var showMeetSheet = false
 
@@ -41,6 +42,7 @@ struct HomeMomentView: View {
                 partnerName: app.partner?.displayName ?? "Your partner",
                 partnerInitials: app.partner?.initials ?? "?",
                 daysRemaining: reunionDays,
+                distance: distanceInfo,
                 onTap: { app.requestedTab = 3 },          // open the Moods tab
                 onCountdownTap: { showMeetSheet = true }   // open "When do you meet?"
             )
@@ -50,6 +52,26 @@ struct HomeMomentView: View {
     /// Days until the reunion — the pinned "meeting" countdown, else the soonest pinned.
     private var reunionDays: Int? {
         (countdowns.countdowns.first { $0.category == .meeting } ?? countdowns.pinned)?.daysRemaining
+    }
+
+    /// "N km apart" + the two cities + freshness — nil until both partners share a location.
+    private var distanceInfo: FreshMoodDistance? {
+        guard let label = location.distanceApartLabel else { return nil }
+        let route: String? = {
+            if let p = location.partnerLocation?.cityLabel, let m = location.myLocation?.cityLabel {
+                return "\(p) ↔ \(m)"
+            }
+            return nil
+        }()
+        let updated = location.partnerLocation.map { relativeShort($0.updatedAt) }
+        return FreshMoodDistance(label: label, route: route, updated: updated)
+    }
+
+    /// Compact relative time, e.g. "1h ago".
+    private func relativeShort(_ date: Date) -> String {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f.localizedString(for: date, relativeTo: Date())
     }
 
     // MARK: - Today's reminders (checkable)

@@ -73,7 +73,8 @@ final class FirebaseService: ObservableObject {
     enum RType {
         static let reminder = "reminders", countdown = "countdowns", letter = "letters"
         static let virtualDate = "virtualDates", mood = "moods", ping = "pings"
-        static let all = [reminder, countdown, letter, virtualDate, mood, ping]
+        static let location = "locations"
+        static let all = [reminder, countdown, letter, virtualDate, mood, ping, location]
     }
 
     private var listeners: [ListenerRegistration] = []
@@ -536,4 +537,6 @@ final class FirebaseService: ObservableObject {
     func saveVirtualDate(_ d: VirtualDateItem) async { await save(d, id: d.id, type: RType.virtualDate) }
     func saveMood(_ m: MoodStatus) async { await save(m, id: m.id, type: RType.mood) }
     func sendPing(_ p: MissingYouPing) async { await save(p, id: p.id, type: RType.ping) }
+    func saveLocation(_ l: SharedLocation) async { await save(l, id: l.id, type: RType.location) }
+    func deleteLocation(_ l: SharedLocation) async { await delete(id: l.id, type: RType.location) }
 }

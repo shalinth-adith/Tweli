@@ -11,12 +11,22 @@
 
 import SwiftUI
 
+/// The "N km apart" line on the mood card (designs 21a/b). `nil` until both
+/// partners have shared a location — the card then shows a sentimental fallback.
+struct FreshMoodDistance {
+    let label: String       // "8,432 km"
+    let route: String?      // "Chennai ↔ London" (partner ↔ you)
+    let updated: String?    // "1h ago"
+}
+
 struct FreshMoodCardView: View {
     let mood: MoodStatus
     let partnerName: String
     let partnerInitials: String
     /// Days until the reunion (nil ⇒ no meet date set yet → chip prompts to add one).
     let daysRemaining: Int?
+    /// How far apart the two of you are (nil ⇒ show the sentimental footer instead).
+    let distance: FreshMoodDistance?
     /// Tap the card body — open the Moods tab.
     var onTap: () -> Void
     /// Tap the ❤️ chip — open the "When do you meet?" sheet.
@@ -128,9 +138,49 @@ struct FreshMoodCardView: View {
         }
     }
 
-    // MARK: - Footer (privacy reassurance)
+    // MARK: - Footer ("N km apart", or a sentimental fallback)
 
-    private var footer: some View {
+    @ViewBuilder private var footer: some View {
+        Group {
+            if let distance {
+                distanceRow(distance)
+            } else {
+                sentimentalRow
+            }
+        }
+        .padding(.top, 14)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color(UIColor.separator).opacity(0.5)).frame(height: 1)
+        }
+    }
+
+    private func distanceRow(_ distance: FreshMoodDistance) -> some View {
+        HStack(spacing: 10) {
+            LocationPinIcon(size: 20, color: .twAccent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(distance.label) apart")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.primary)
+                if let route = distance.route {
+                    Text(route)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 4)
+            if let updated = distance.updated {
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                    Text(updated)
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private var sentimentalRow: some View {
         HStack(spacing: 6) {
             Image(systemName: "lock.fill").font(.system(size: 11, weight: .semibold))
             Text("Thinking of you across the miles ♡")
@@ -138,9 +188,5 @@ struct FreshMoodCardView: View {
         }
         .foregroundStyle(.tertiary)
         .frame(maxWidth: .infinity)
-        .padding(.top, 14)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Color(UIColor.separator).opacity(0.5)).frame(height: 1)
-        }
     }
 }

@@ -125,6 +125,7 @@ final class AppViewModel: ObservableObject {
     let letterService: OpenWhenLetterService
     let moodService: MoodService
     let missingYouService: MissingYouService
+    let locationService: LocationService
 
     init() {
         coupleSpaceService = CoupleSpaceService(cloud: cloud)
@@ -134,6 +135,7 @@ final class AppViewModel: ObservableObject {
         letterService = OpenWhenLetterService(cloud: cloud)
         moodService = MoodService(cloud: cloud)
         missingYouService = MissingYouService(cloud: cloud)
+        locationService = LocationService(cloud: cloud)
 
         wireIdentities()
         wireWidgetRefresh()
@@ -189,6 +191,8 @@ final class AppViewModel: ObservableObject {
         reminderService.currentUserId = meId
         moodService.currentUserId = meId
         moodService.partnerId = partnerId
+        locationService.currentUserId = meId
+        locationService.partnerId = partnerId
         missingYouService.currentUserId = meId
         missingYouService.partnerId = partnerId
         if let spaceId = coupleSpaceService.coupleSpace?.id {
@@ -203,6 +207,7 @@ final class AppViewModel: ObservableObject {
         virtualDateService.onDataChanged = refresh
         letterService.onDataChanged = refresh
         moodService.onDataChanged = refresh
+        locationService.onDataChanged = refresh
         missingYouService.onDataChanged = refresh
     }
 
@@ -300,6 +305,7 @@ final class AppViewModel: ObservableObject {
         letterService.mergeRemote(decode(FirebaseService.RType.letter), deletedIDs: changes.deletedIDs)
         virtualDateService.mergeRemote(decode(FirebaseService.RType.virtualDate), deletedIDs: changes.deletedIDs)
         moodService.mergeRemote(decode(FirebaseService.RType.mood), deletedIDs: changes.deletedIDs)
+        locationService.mergeRemote(decode(FirebaseService.RType.location), deletedIDs: changes.deletedIDs)
         missingYouService.mergeRemote(decode(FirebaseService.RType.ping), deletedIDs: changes.deletedIDs)
         refreshWidget()
     }

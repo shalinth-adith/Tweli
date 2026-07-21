@@ -15,6 +15,7 @@ struct AboutYouView: View {
     @EnvironmentObject private var app: AppViewModel
     @EnvironmentObject private var couple: CoupleSpaceService
     @EnvironmentObject private var auth: AuthService
+    @EnvironmentObject private var location: LocationService
     @Environment(\.dismiss) private var dismiss
 
     /// When true, the screen is opened from Settings to edit an existing profile
@@ -76,6 +77,14 @@ struct AboutYouView: View {
                             icon("mappin.and.ellipse", tint: .secondary)
                             TextField("Where you are", text: $city)
                                 .font(.system(size: 17))
+                            // Auto-fill the city + capture coordinates for the
+                            // "how far apart" distance. Manual entry stays available.
+                            Button { location.requestAndCapture() } label: {
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Brand.pink)
+                            }
+                            .buttonStyle(.plain)
                             Text(gmtLabel)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(.secondary)
@@ -113,6 +122,10 @@ struct AboutYouView: View {
             if photoData == nil { photoData = couple.currentUser.photoData }
         }
         .onChange(of: photoItem) { _, item in loadPhoto(item) }
+        // When a location fix reverse-geocodes to a city, fill the field with it.
+        .onChange(of: location.myLocation?.cityLabel) { _, label in
+            if let label, !label.isEmpty { city = label }
+        }
         .sheet(isPresented: $showBirthdaySheet) { birthdaySheet }
     }
 
