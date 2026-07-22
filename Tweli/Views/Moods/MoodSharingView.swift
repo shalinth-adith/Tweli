@@ -2,60 +2,53 @@
 //  MoodSharingView.swift
 //  Tweli
 //
-//  Partner's mood meter + your own mood meter (both tap into a detail view),
-//  and a "How are you feeling?" chip picker that updates your meter live.
+//  Design 24a/24b — "Mood composer II", typography-first. No emoji, no faces:
+//  the words carry the feeling. A live "what your partner will see" preview sets
+//  the chosen mood in large expressive type, chips stage the pick, and a single
+//  bottom CTA shares mood + note together. Partner's mood lives on Home, not here.
 //
 
 import SwiftUI
+import UIKit
 
 struct MoodSharingView: View {
     @EnvironmentObject private var app: AppViewModel
     @EnvironmentObject private var service: MoodService
 
+    /// Staged pick — live in the preview, committed only by the Share button.
+    @State private var selected: PartnerMood?
     @State private var message = ""
+    @State private var justShared = false
     @FocusState private var messageFocused: Bool
 
     /// Keeps the message short enough to sit comfortably on the widget.
     private let messageLimit = 80
 
+    private var partnerName: String { app.partner?.displayName ?? "Your partner" }
+
+    /// What the preview shows: the staged pick, else the currently shared mood.
+    private var previewMood: PartnerMood { selected ?? service.myMood?.mood ?? .missingYou }
+
+    private var trimmedMessage: String { message.trimmingCharacters(in: .whitespacesAndNewlines) }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // Partner's meter only exists once someone has actually joined —
-                // before that we show an honest invite prompt, never a blank
-                // "Partner · Not set" shell.
-                if let partner = app.partner {
-                    NavigationLink(value: MoodTarget.partner) {
-                        meter(title: "\(partner.displayName)'s mood",
-                              initials: partner.initials,
-                              background: .twAccentSoft, accent: .twAccent,
-                              mood: service.partnerMood?.mood,
-                              updated: service.partnerMood?.relativeLabel,
-                              week: service.partnerWeekMoods)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    partnerInvitePrompt
-                }
-
-                NavigationLink(value: MoodTarget.me) {
-                    meter(title: "Your mood",
-                          initials: app.currentUser.initials,
-                          background: .twAccent2Soft, accent: .twAccent2,
-                          mood: service.myMood?.mood,
-                          updated: service.myMood?.relativeLabel,
-                          week: service.myWeekMoods)
-                }
-                .buttonStyle(.plain)
-
-                feelingSection
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                previewCard.padding(.top, 26)
+                chipSection
+                noteSection
             }
-            .padding(TweliMetrics.screenPadding)
+            .padding(.horizontal, 22)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
-        .background(Color.twBackground.ignoresSafeArea())
-        .navigationTitle("Moods")
-        .navigationDestination(for: MoodTarget.self) { MoodDetailView(target: $0) }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .bottom) { shareBar }
         .onAppear {
+            if selected == nil { selected = service.myMood?.mood }
             if message.isEmpty, let existing = service.myMood?.note { message = existing }
             if app.focusMoodMessage { messageFocused = true; app.focusMoodMessage = false }
         }
@@ -64,126 +57,169 @@ struct MoodSharingView: View {
         }
     }
 
-    // MARK: - Solo invite prompt (shown in place of the partner meter)
+    // MARK: - Header
 
-    private var partnerInvitePrompt: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(Color.twAccent.opacity(0.15)).frame(width: 44, height: 44)
-                Image(systemName: "heart.circle").foregroundStyle(Color.twAccent).font(.title3)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("No partner yet").tweliEyebrow(.twAccent)
-                Text("Once your partner joins, you'll see how they're feeling here.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("MOODS")
+                .font(.system(size: 12, weight: .bold))
+                .kerning(1.2)
+                .foregroundStyle(Brand.pink)
+            Text("How are you\nfeeling?")
+                .font(.system(size: 33, weight: .heavy))
+                .kerning(-0.8)
+                .lineSpacing(1)
+                .foregroundStyle(.primary)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.twAccentSoft)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
-    // MARK: - Reusable mood meter card
+    // MARK: - "Partner will see" live preview
 
-    private func meter(title: String, initials: String, background: Color, accent: Color,
-                       mood: PartnerMood?, updated: String?, week: [PartnerMood]) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                Circle().fill(accent).frame(width: 44, height: 44)
-                    .overlay(Text(initials).font(.headline).foregroundStyle(.white))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).tweliEyebrow(accent)
-                    Text(mood?.label ?? "Not set")
-                        .font(.system(size: 21, weight: .heavy)).foregroundStyle(.primary)
-                }
-                Spacer()
-                Text(mood?.emoji ?? "💗").font(.title2)
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-            }
-
-            HStack(spacing: 6) {
-                ForEach(Array(week.enumerated()), id: \.offset) { _, m in
-                    Capsule().fill(m.tint).frame(height: 5).frame(maxWidth: .infinity)
-                }
-            }
+    private var previewCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Last 7 days").font(.caption2).foregroundStyle(.tertiary)
+                Text("\(partnerName.uppercased()) WILL SEE")
+                    .font(.system(size: 11, weight: .bold))
+                    .kerning(1.4)
+                    .foregroundStyle(.tertiary)
                 Spacer()
-                Text(updated.map { "updated \($0)" } ?? "tap for detail")
-                    .font(.caption2).foregroundStyle(.tertiary)
+                Circle()
+                    .fill(LinearGradient(colors: [Brand.indigoLift, Brand.indigo],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 30, height: 30)
+                    .overlay(
+                        Text(app.currentUser.initials.isEmpty ? "♡" : app.currentUser.initials)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    )
+            }
+
+            Text(previewMood.label)
+                .font(.system(size: 34, weight: .heavy))
+                .kerning(-1)
+                .foregroundStyle(.primary)
+                .padding(.top, 20)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.16), value: previewMood)
+
+            if !trimmedMessage.isEmpty {
+                Text("\u{201C}\(trimmedMessage)\u{201D}")
+                    .font(.system(size: 14.5))
+                    .italic()
+                    .lineSpacing(3)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 12)
             }
         }
-        .padding(20)
+        .padding(.init(top: 22, leading: 22, bottom: 24, trailing: 22))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(background)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
-    // MARK: - "How are you feeling?" chips
+    // MARK: - Feeling chips
 
-    private var feelingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("How are you feeling?").font(.headline).foregroundStyle(.primary)
-
-            // Custom message — travels with your mood and sits on your partner's widget.
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "text.bubble.fill").foregroundStyle(Color.twAccent2)
-                        .padding(.top, 2)
-                    TextField("Add a message for \(app.partner?.displayName ?? "your partner")…",
-                              text: $message, axis: .vertical)
-                        .lineLimit(1...3)
-                        .focused($messageFocused)
-                        .onChange(of: message) { _, new in
-                            if new.count > messageLimit { message = String(new.prefix(messageLimit)) }
-                        }
-                }
-                .padding(14)
-                .background(Color.twElevated)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-                HStack {
-                    Text("Shows on \(app.partner?.displayName ?? "your partner")'s widget")
-                        .font(.caption2).foregroundStyle(.tertiary)
-                    Spacer()
-                    Text("\(message.count)/\(messageLimit)")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(message.count >= messageLimit ? Color.twWarn : Color.twInkTertiary)
-                }
-            }
+    private var chipSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("CHOOSE A FEELING")
+                .font(.system(size: 12, weight: .bold))
+                .kerning(1)
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 2)
 
             FlowLayout(spacing: 10) {
                 ForEach(PartnerMood.allCases) { mood in
-                    moodChip(mood)
+                    chip(mood)
                 }
             }
-            Text("Pick a mood to share it — along with your message.")
-                .font(.caption).foregroundStyle(.secondary)
         }
+        .padding(.top, 30)
     }
 
-    private func moodChip(_ mood: PartnerMood) -> some View {
-        let selected = service.myMood?.mood == mood
+    private func chip(_ mood: PartnerMood) -> some View {
+        let on = previewMood == mood
         return Button {
-            let note = message.trimmingCharacters(in: .whitespacesAndNewlines)
-            withAnimation(.snappy) { service.setMyMood(mood, note: note.isEmpty ? nil : note) }
-            messageFocused = false
+            withAnimation(.easeInOut(duration: 0.16)) { selected = mood }
+            justShared = false
         } label: {
-            HStack(spacing: 5) {
-                if selected { Image(systemName: "checkmark").font(.caption2.weight(.bold)) }
-                Text(mood.label).font(.subheadline.weight(selected ? .bold : .semibold))
-            }
-            .padding(.horizontal, 16).padding(.vertical, 11)
-            .foregroundStyle(selected ? .white : Color.twInk)
-            .background(selected ? Color.twAccent : Color.twElevated)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: selected ? Color.twAccent.opacity(0.35) : .black.opacity(0.05),
-                    radius: selected ? 8 : 4, x: 0, y: selected ? 4 : 1)
+            Text(mood.label)
+                .font(.system(size: 14.5, weight: on ? .bold : .semibold))
+                .foregroundStyle(on ? .white : Color.primary.opacity(0.72))
+                .padding(.horizontal, 17).padding(.vertical, 11)
+                .background(on ? Brand.pink : .clear, in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.primary.opacity(on ? 0 : 0.18), lineWidth: 1))
+                .shadow(color: on ? Brand.pink.opacity(0.4) : .clear, radius: 10, x: 0, y: 6)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Note
+
+    private var noteSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("ADD A NOTE (OPTIONAL)")
+                    .font(.system(size: 12, weight: .bold))
+                    .kerning(1)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Text("\(message.count) / \(messageLimit) characters")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(message.count >= messageLimit ? Brand.pink : Color(UIColor.tertiaryLabel))
+            }
+            .padding(.horizontal, 2)
+
+            TextField("Say a little more…", text: $message, axis: .vertical)
+                .font(.system(size: 15.5))
+                .lineLimit(1...3)
+                .focused($messageFocused)
+                .onChange(of: message) { _, new in
+                    if new.count > messageLimit { message = String(new.prefix(messageLimit)) }
+                }
+                .padding(16)
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .padding(.top, 30)
+    }
+
+    // MARK: - Share CTA (pinned)
+
+    private var shareBar: some View {
+        VStack(spacing: 11) {
+            Button {
+                share()
+            } label: {
+                Text(justShared ? "Shared ♡" : "Share with \(partnerName)")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .background(Brand.pink, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: Brand.pink.opacity(0.42), radius: 16, x: 0, y: 8)
+            }
+            .buttonStyle(.plain)
+
+            Text("Updates instantly on their home widget")
+                .font(.system(size: 12.5))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+        .background(Color(UIColor.systemGroupedBackground).opacity(0.94))
+    }
+
+    private func share() {
+        let mood = previewMood
+        service.setMyMood(mood, note: trimmedMessage.isEmpty ? nil : trimmedMessage)
+        messageFocused = false
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        withAnimation(.snappy) { justShared = true }
+        Task {
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            withAnimation { justShared = false }
+        }
     }
 }
 

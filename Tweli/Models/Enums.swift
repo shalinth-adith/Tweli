@@ -179,56 +179,65 @@ enum VirtualDateStatus: String, Codable, CaseIterable, Identifiable {
 
 // MARK: - Partner mood
 
+/// The nine feelings of the typographic mood composer (design 24a/b). Case order
+/// == chip order on the Moods screen. Raw values are wire format (synced inside
+/// MoodStatus payloads) — surviving cases keep their original names so existing
+/// remote moods still decode.
 enum PartnerMood: String, Codable, CaseIterable, Identifiable {
-    case missingYou, busyToday, lowEnergy, needReassurance
-    case needCall, needSpace, excitedToMeet, traveling
+    case missingYou, excitedToMeet, calm, content, overwhelmed
+    case lowEnergy, thinkingOfYou, needCall, needSpace
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .missingYou: return "Missing you"
-        case .busyToday: return "Busy today"
+        case .excitedToMeet: return "Excited to meet"
+        case .calm: return "Calm"
+        case .content: return "Content"
+        case .overwhelmed: return "Overwhelmed"
         case .lowEnergy: return "Low energy"
-        case .needReassurance: return "Need reassurance"
+        case .thinkingOfYou: return "Thinking of you"
         case .needCall: return "Need a call"
         case .needSpace: return "Need space"
-        case .excitedToMeet: return "Excited to meet"
-        case .traveling: return "Traveling"
         }
     }
 
+    /// Legacy surfaces only (widget + fallbacks) — the composer itself is
+    /// typography-first and renders no emoji (design 24a/b).
     var emoji: String {
         switch self {
         case .missingYou: return "🥺"
-        case .busyToday: return "💼"
+        case .excitedToMeet: return "✨"
+        case .calm: return "🌊"
+        case .content: return "☀️"
+        case .overwhelmed: return "🌧️"
         case .lowEnergy: return "🌙"
-        case .needReassurance: return "🫂"
+        case .thinkingOfYou: return "💭"
         case .needCall: return "📞"
         case .needSpace: return "🌿"
-        case .excitedToMeet: return "✨"
-        case .traveling: return "✈️"
         }
     }
 
     var sfSymbol: String {
         switch self {
         case .missingYou: return "heart.fill"
-        case .busyToday: return "briefcase.fill"
+        case .excitedToMeet: return "sparkles"
+        case .calm: return "water.waves"
+        case .content: return "sun.max.fill"
+        case .overwhelmed: return "cloud.rain.fill"
         case .lowEnergy: return "moon.fill"
-        case .needReassurance: return "hands.and.sparkles.fill"
+        case .thinkingOfYou: return "heart.circle.fill"
         case .needCall: return "phone.fill"
         case .needSpace: return "leaf.fill"
-        case .excitedToMeet: return "sparkles"
-        case .traveling: return "airplane"
         }
     }
 
     /// Colour used for the 7-day mood-history bar on the Moods screen.
     var tint: Color {
         switch self {
-        case .missingYou, .needReassurance, .needCall: return .twAccent
-        case .excitedToMeet, .busyToday, .traveling: return .twAccent2
-        case .lowEnergy, .needSpace: return .twInkTertiary
+        case .missingYou, .thinkingOfYou, .needCall: return .twAccent
+        case .excitedToMeet, .content, .calm: return .twAccent2
+        case .lowEnergy, .needSpace, .overwhelmed: return .twInkTertiary
         }
     }
 }
