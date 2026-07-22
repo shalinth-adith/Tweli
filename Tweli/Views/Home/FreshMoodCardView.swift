@@ -66,7 +66,7 @@ struct FreshMoodCardView: View {
         .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 1)
     }
 
-    // MARK: - Header ("Just updated · now" + ❤️ days chip)
+    // MARK: - Header ("From <partner>" + ❤️ days chip)
 
     private var header: some View {
         HStack(spacing: 8) {
@@ -75,7 +75,7 @@ struct FreshMoodCardView: View {
                 .frame(width: 9, height: 9)
                 .scaleEffect(pulsing ? 1 : 0.55)
                 .opacity(pulsing ? 1 : 0.5)
-            Text("Just updated · \(mood.relativeLabel)")
+            Text("From \(partnerName)")
                 .font(.system(size: 11, weight: .heavy))
                 .textCase(.uppercase)
                 .kerning(0.7)

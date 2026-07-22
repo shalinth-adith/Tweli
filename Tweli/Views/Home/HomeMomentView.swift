@@ -80,7 +80,7 @@ struct HomeMomentView: View {
         CardView(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("Today").tweliEyebrow()
+                    Text("Reminders · Today").tweliEyebrow()
                     Spacer()
                     if !reminders.today.isEmpty {
                         Text(todayCountLabel)
@@ -98,9 +98,24 @@ struct HomeMomentView: View {
                     ForEach(reminders.today.prefix(3)) { r in
                         HStack(spacing: 12) {
                             Button { withAnimation { reminders.toggleDone(r) } } label: {
-                                Image(systemName: r.isCompleted ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(r.isCompleted ? Color.twSuccess : Color.twInkTertiary)
-                                    .font(.title3)
+                                // Curved-square checkbox (design: rounded square,
+                                // warn-tinted while the reminder is overdue).
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .strokeBorder(r.isCompleted ? .clear
+                                                      : (r.isMissed ? Color.twWarn : Color.twInkTertiary),
+                                                      lineWidth: 1.8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .fill(r.isCompleted ? Color.twSuccess : .clear)
+                                        )
+                                        .frame(width: 25, height: 25)
+                                    if r.isCompleted {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundStyle(.white)
+                                    }
+                                }
                             }
                             .buttonStyle(.plain)
                             Text(r.title)
