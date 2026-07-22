@@ -73,6 +73,9 @@ struct MainTabView: View {
             await app.notifications.requestAuthorization()
             app.bootstrapNotifications()
             app.syncNow()   // pull any CloudKit changes for the couple space
+            // Location powers the "N km apart" row on the Home mood card: ask on
+            // first entry into the session, then keep the fix fresh hourly.
+            app.locationService.requestIfNeverAsked()
             app.locationService.refreshIfStale()   // refresh our shared location if stale
         }
     }

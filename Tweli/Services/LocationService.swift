@@ -50,7 +50,12 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     // MARK: - Per-user records (mirrors MoodService)
 
     var myLocation: SharedLocation? { locations.first { $0.userId == currentUserId } }
-    var partnerLocation: SharedLocation? { locations.first { $0.userId == partnerId } }
+    /// Any location NOT authored by me is the partner's — same reasoning as
+    /// MoodService.partnerMood (profile UUIDs never cross devices; the local
+    /// `partnerId` is fabricated and can't match). Newest wins if multiple.
+    var partnerLocation: SharedLocation? {
+        locations.filter { $0.userId != currentUserId }.max { $0.updatedAt < $1.updatedAt }
+    }
 
     // MARK: - Distance (computed on-device, reactive)
 
@@ -94,6 +99,17 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         default:
             break   // denied / restricted → manual city fallback, no distance
         }
+    }
+
+    /// First-entry ask: when the user lands in the connected session and we've
+    /// NEVER asked for location, raise the system prompt and capture on grant.
+    /// One-shot by construction — after any decision the status is no longer
+    /// .notDetermined, so this becomes a permanent no-op (denied users keep the
+    /// manual-city fallback and the "Use my location" button in About you).
+    func requestIfNeverAsked() {
+        guard manager.authorizationStatus == .notDetermined else { return }
+        pendingCapture = true
+        manager.requestWhenInUseAuthorization()
     }
 
     /// Foreground freshness check — the "every 1 hr" mechanism. Re-captures our own
