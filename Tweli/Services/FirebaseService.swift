@@ -255,10 +255,14 @@ final class FirebaseService: ObservableObject {
     func publishPairCode(spaceTitle: String) async throws -> String {
         guard !isDevOrOffline, let spaceId, let uid = currentUid else { throw PairCodeError.network }
 
-        // Reuse a previously published, unexpired code so re-visits show the same one.
+        // Reuse a previously published, unexpired code so re-visits show the same
+        // one — but ONLY if it still points at the CURRENT space. A cached code
+        // from a previous space (re-created after sign-out/reinstall) would send
+        // the partner into an orphaned space the owner no longer listens to.
         if let cached = defaults.string(forKey: pairCodeKey),
            let doc = try? await db.collection("pairCodes").document(cached).getDocument(),
            doc.exists,
+           doc["spaceId"] as? String == spaceId,
            let expires = (doc["expiresAt"] as? Timestamp)?.dateValue(), expires > Date() {
             log("reusing pair code \(cached)")
             return cached
@@ -344,6 +348,13 @@ final class FirebaseService: ObservableObject {
         } catch let e as NSError where e.domain == "Tweli.join" && e.code == 409 {
             log("join \(invite.spaceId): space full")
             throw PairCodeError.spaceFull
+        } catch let e as NSError where e.domain == FirestoreErrorDomain
+                    && e.code == FirestoreErrorCode.permissionDenied.rawValue {
+            // Rules deny non-members reading a FULL space, so the transaction's
+            // initial read hits PERMISSION_DENIED when both seats are taken —
+            // that's "space is full", not a connectivity problem.
+            log("join \(invite.spaceId): permission denied (space full or takeover)")
+            throw PairCodeError.spaceFull
         } catch {
             log("join \(invite.spaceId) failed: \(error.localizedDescription)")
             throw PairCodeError.network
@@ -351,6 +362,26 @@ final class FirebaseService: ObservableObject {
         setRole(.participant)
         setSpaceId(invite.spaceId)
         log("joined space \(invite.spaceId) as \(participantName)")
+    }
+
+    /// Write MY current profile name into the space doc's `memberNames` (allowed by
+    /// the member-edit rule). Repairs a stale entry — e.g. the "You" placeholder
+    /// written at createSpace time before the user filled in "About you" — so the
+    /// partner's device shows the real name via its space-doc listener.
+    func updateMyMemberName(_ name: String) async {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != "You",
+              role != .none, !isDevOrOffline, let spaceId, let uid = currentUid else { return }
+        defaults.set(trimmed, forKey: authNameKey)   // future pair codes carry it too
+        do {
+            try await db.collection("spaces").document(spaceId).updateData([
+                FieldPath(["memberNames", uid]): trimmed,
+                "updatedAt": FieldValue.serverTimestamp()
+            ])
+            log("memberNames[\(uid)] = \(trimmed)")
+        } catch {
+            log("updateMyMemberName failed: \(error.localizedDescription)")
+        }
     }
 
     /// Owner: the partner's display name once they've joined, or nil. Reads the

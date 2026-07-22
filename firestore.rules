@@ -21,8 +21,15 @@ service cloud.firestore {
     // ---- spaces/{spaceId} ----
     match /spaces/{spaceId} {
 
-      // Only the two members can read the space.
-      allow get, list: if isSignedIn()
+      // Members can always read. A signed-in non-member may `get` a space that
+      // still has an open seat: the join transaction must READ the space doc
+      // before its atomic update, and the joiner is by definition not a member
+      // yet. Exposure matches what the pair code already reveals (title + one
+      // name); once the space is full, non-members lose read access again.
+      allow get: if isSignedIn()
+        && (request.auth.uid in resource.data.memberUids
+            || resource.data.memberUids.size() < 2);
+      allow list: if isSignedIn()
         && request.auth.uid in resource.data.memberUids;
 
       // CREATE: creator seeds a solo space. They must be the owner AND the only member.

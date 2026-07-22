@@ -33,23 +33,33 @@ final class MoodService: ObservableObject {
     }
 
     var myMood: MoodStatus? { moods.first { $0.userId == currentUserId } }
-    var partnerMood: MoodStatus? { moods.first { $0.userId == partnerId } }
+    /// Any mood NOT authored by me is the partner's (a space has exactly two
+    /// people). Never match on `partnerId`: profile UUIDs live only on their own
+    /// device, so the locally-fabricated partner id can't equal the real author id
+    /// inside a synced payload. Newest wins if multiple (e.g. partner reinstalled).
+    var partnerMood: MoodStatus? {
+        moods.filter { $0.userId != currentUserId }.max { $0.updatedAt < $1.updatedAt }
+    }
 
-    /// The partner's mood only if they've *changed* it since we last recorded a
-    /// baseline — this is what raises the "New mood" interstitial.
+    /// The partner's mood if they've *changed* it since we last acknowledged one —
+    /// this is what raises the "New mood" interstitial.
     ///
-    /// The very first partner mood we ever observe is recorded silently as the
-    /// baseline and returns nil: the card must not greet a first-time user (or
-    /// the mood that was already there when they paired). Only a genuinely newer
-    /// update afterwards returns non-nil.
+    /// The very FIRST partner mood we ever observe also counts as fresh: entering
+    /// the session for the first time should greet the user with the mood their
+    /// partner already set (design 21a/b), not swallow it as a silent baseline.
+    /// Acknowledging (swipe/dismiss) records the baseline so it won't re-raise.
     var freshPartnerMood: MoodStatus? {
         guard let mood = partnerMood else { return nil }
         guard let lastSeen = defaults.object(forKey: lastSeenPartnerMoodKey) as? Date else {
-            // First partner mood ever seen → establish the baseline, don't greet.
-            defaults.set(mood.updatedAt, forKey: lastSeenPartnerMoodKey)
-            return nil
+            return mood   // first partner mood ever seen → greet on first entry
         }
         return mood.updatedAt > lastSeen ? mood : nil
+    }
+
+    /// True once the user has been greeted with (and acknowledged) any partner
+    /// mood. False ⇒ the next partner mood to arrive is their first-entry greet.
+    var hasGreetedPartnerMood: Bool {
+        defaults.object(forKey: lastSeenPartnerMoodKey) != nil
     }
 
     /// Mark the current partner mood as seen. The strip stays on Home, but the

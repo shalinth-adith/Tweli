@@ -54,10 +54,10 @@ struct SettingsView: View {
 
             Section {
                 Button("Leave shared space", role: .destructive) {
-                    couple.disconnect()
+                    app.leaveSpace()   // clears couple state AND cloud role/listeners
                 }
                 Button("Sign out", role: .destructive) {
-                    couple.disconnect()
+                    app.leaveSpace()
                     auth.signOut()
                 }
             } footer: {

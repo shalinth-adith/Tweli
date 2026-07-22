@@ -23,6 +23,10 @@ final class CoupleSpaceService: ObservableObject {
     private let spaceKey = "tweli.coupleSpace"
     private let partnerKey = "tweli.partner"
     private let aboutYouKey = "tweli.aboutYouDone"
+    /// AuthService's persisted-name key. FirebaseService reads THIS key when writing
+    /// `memberNames` / pair-code `createdByName`, so profile-name edits must land
+    /// here too — otherwise the partner sees the stale Apple-name fallback ("You").
+    private let authNameKey = "tweli.auth.displayName"
     private let defaults = UserDefaults.standard
 
     init(cloud: FirebaseService) {
@@ -69,6 +73,7 @@ final class CoupleSpaceService: ObservableObject {
         guard !trimmed.isEmpty else { return }
         currentUser.displayName = trimmed
         save(currentUser, userKey)
+        defaults.set(trimmed, forKey: authNameKey)   // keep the cloud-visible name in sync
     }
 
     /// Seed the name from the Apple account, but NEVER overwrite a name the user
@@ -85,7 +90,10 @@ final class CoupleSpaceService: ObservableObject {
     func updateProfile(name: String, birthday: Date?, city: String?,
                        timezoneIdentifier: String?, photoData: Data?) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty { currentUser.displayName = trimmed }
+        if !trimmed.isEmpty {
+            currentUser.displayName = trimmed
+            defaults.set(trimmed, forKey: authNameKey)   // keep the cloud-visible name in sync
+        }
         currentUser.birthday = birthday
         currentUser.city = city?.trimmingCharacters(in: .whitespaces)
         currentUser.timezoneIdentifier = timezoneIdentifier
@@ -143,6 +151,21 @@ final class CoupleSpaceService: ObservableObject {
         guard partner == nil else { return }
         partner = UserProfile(displayName: name, avatarEmoji: "💛")
         save(partner, partnerKey)
+    }
+
+    /// Reflect the partner's current name from the space doc's `memberNames`.
+    /// Creates the partner on first sight (owner side) and RENAMES on change —
+    /// e.g. when the partner fixes their profile name after pairing, or when the
+    /// join-time snapshot only had the "You" placeholder.
+    func updatePartnerName(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        if partner == nil {
+            setPartnerJoined(name: trimmed)
+        } else if partner?.displayName != trimmed {
+            partner?.displayName = trimmed
+            save(partner, partnerKey)
+        }
     }
 
     /// True while the owner is connected but nobody has accepted the invite yet.

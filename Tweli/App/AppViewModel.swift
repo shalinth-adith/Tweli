@@ -256,13 +256,16 @@ final class AppViewModel: ObservableObject {
 
     // MARK: - Firebase sync
 
-    /// True once the Firestore snapshot listeners are attached, so `syncNow()` starts
-    /// them exactly once (further calls just refresh the widget).
-    private var listenersStarted = false
+    /// The spaceId the live listeners are currently bound to. Comparing against
+    /// `cloud.spaceId` (instead of a "started once" flag) means leave→rejoin and
+    /// sign-out→re-create automatically REBIND the listeners to the new space —
+    /// a boolean left them attached to the old space until the next app launch.
+    private var listeningSpaceId: String?
 
-    /// Attach the live Firestore listeners once and register for push. Offline-first:
-    /// Firestore's persistent cache keeps the local store authoritative when the
-    /// backend is unreachable — and, unlike CloudKit, never fails on personal quota.
+    /// Attach the live Firestore listeners once per space and register for push.
+    /// Offline-first: Firestore's persistent cache keeps the local store
+    /// authoritative when the backend is unreachable — and, unlike CloudKit, never
+    /// fails on personal quota.
     func syncNow() {
         Task {
             await cloud.refreshAccountStatus()
@@ -276,25 +279,45 @@ final class AppViewModel: ObservableObject {
                 return
             }
             guard cloud.role != .none else { return }
-            if !listenersStarted {
-                listenersStarted = true
+            if listeningSpaceId != cloud.spaceId {
+                listeningSpaceId = cloud.spaceId
                 cloud.startListening { [weak self] changes in
                     Task { @MainActor in self?.applyRemoteChanges(changes) }
                 }
                 await cloud.registerForPush()
+                // Repair the cloud copy of my name (createSpace may have written
+                // the "You" placeholder before "About you" ran).
+                await cloud.updateMyMemberName(coupleSpaceService.currentUser.displayName)
             }
             refreshWidget()
         }
+    }
+
+    /// Push my current profile name into the space doc — called after "About you"
+    /// saves so the partner's device reflects a rename via its space-doc listener.
+    func pushMyNameToSpace() {
+        Task { await cloud.updateMyMemberName(coupleSpaceService.currentUser.displayName) }
+    }
+
+    /// Leave the shared space: clear local couple state AND detach cloud
+    /// role/spaceId/listeners so a later join binds cleanly to the new space.
+    func leaveSpace() {
+        coupleSpaceService.disconnect()
+        cloud.reset()
+        listeningSpaceId = nil
     }
 
     /// Merge a batch of remote changes delivered by a snapshot listener into the
     /// local services. The `RemoteChanges` shape is unchanged from the CloudKit
     /// version, so the decode + mergeRemote wiring is reused verbatim.
     private func applyRemoteChanges(_ changes: FirebaseService.RemoteChanges) {
-        // Space-doc listener: partner has joined → reflect their name (replaces the
-        // owner-side acceptedParticipantName() poll).
-        if let name = changes.partnerJoinedName, coupleSpaceService.awaitingPartner {
-            coupleSpaceService.setPartnerJoined(name: name)
+        // Space-doc listener: partner joined OR renamed → reflect their current
+        // name (replaces the owner-side acceptedParticipantName() poll). Applied
+        // unconditionally: gating on awaitingPartner froze the join-time "You"
+        // placeholder forever on the participant's device.
+        if let name = changes.partnerJoinedName {
+            coupleSpaceService.updatePartnerName(name)
+            wireIdentities()   // partner may have just been created — rewire ids
         }
         let dec = JSONDecoder()
         func decode<T: Decodable>(_ type: String) -> [T] {
@@ -305,6 +328,11 @@ final class AppViewModel: ObservableObject {
         letterService.mergeRemote(decode(FirebaseService.RType.letter), deletedIDs: changes.deletedIDs)
         virtualDateService.mergeRemote(decode(FirebaseService.RType.virtualDate), deletedIDs: changes.deletedIDs)
         moodService.mergeRemote(decode(FirebaseService.RType.mood), deletedIDs: changes.deletedIDs)
+        // First entry into the session: the partner's pre-existing mood usually
+        // lands via this listener AFTER Home is already up — greet the moment it
+        // arrives (only until the first acknowledge; later moods keep the calmer
+        // appear/foreground reveal triggers).
+        if !moodService.hasGreetedPartnerMood { revealFreshMoodIfAny() }
         locationService.mergeRemote(decode(FirebaseService.RType.location), deletedIDs: changes.deletedIDs)
         missingYouService.mergeRemote(decode(FirebaseService.RType.ping), deletedIDs: changes.deletedIDs)
         refreshWidget()
@@ -359,7 +387,8 @@ final class AppViewModel: ObservableObject {
     /// Finish the first-run "About you" step → advance to Create / Join.
     func finishAboutYou() {
         coupleSpaceService.completeAboutYou()
-        wireIdentities()   // pick up the freshly-saved display name
+        wireIdentities()      // pick up the freshly-saved display name
+        pushMyNameToSpace()   // no-op unless already connected (e.g. re-run)
     }
 
     // MARK: - Notification permission

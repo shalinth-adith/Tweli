@@ -106,7 +106,12 @@ struct AboutYouView: View {
 
             BrandCTA(title: isEditing ? "Save" : "Continue", showsArrow: !isEditing) {
                 save()
-                if isEditing { dismiss() } else { app.finishAboutYou() }
+                if isEditing {
+                    app.pushMyNameToSpace()   // partner sees the rename live
+                    dismiss()
+                } else {
+                    app.finishAboutYou()
+                }
             }
             .padding(.horizontal, 20).padding(.bottom, 20)
         }
