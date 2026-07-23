@@ -61,7 +61,16 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
             : reminder.note
         content.sound = .default
 
-        let cal = Calendar.current
+        // Read the reminder's time in the AUTHOR's zone to recover the wall-clock
+        // components they picked ("9:30 AM"). The resulting components carry no
+        // timezone, so UNCalendarNotificationTrigger fires them in THIS device's
+        // local zone — i.e. 9:30 AM wherever the actor is. Same-timezone couples
+        // are unaffected (authorCal == device calendar). Legacy reminders with no
+        // authorTimezone fall back to the device zone (previous behavior).
+        var cal = Calendar.current
+        if let tzId = reminder.authorTimezone, let tz = TimeZone(identifier: tzId) {
+            cal.timeZone = tz
+        }
         let d = reminder.reminderDate
         let comps: DateComponents
         switch reminder.repeatType {

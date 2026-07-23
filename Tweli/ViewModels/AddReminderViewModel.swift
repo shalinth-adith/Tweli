@@ -37,6 +37,7 @@ final class AddReminderViewModel: ObservableObject {
                      reminderDate: combinedDate,
                      repeatType: repeatType,
                      visibility: visibility,
-                     priority: priority)
+                     priority: priority,
+                     authorTimezone: TimeZone.current.identifier)
     }
 }

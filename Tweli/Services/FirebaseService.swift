@@ -384,6 +384,24 @@ final class FirebaseService: ObservableObject {
         }
     }
 
+    /// Write MY IANA timezone into the space doc's `memberTimezones` map. The push
+    /// Cloud Function reads the RECIPIENT's entry so it can respect quiet hours in
+    /// their local time (silent delivery overnight). Same member-edit rule path as
+    /// `updateMyMemberName` / `updateFCMToken` — a partial write of one map field.
+    func updateMyTimezone() async {
+        guard role != .none, !isDevOrOffline, let spaceId, let uid = currentUid else { return }
+        let tz = TimeZone.current.identifier
+        do {
+            try await db.collection("spaces").document(spaceId).updateData([
+                FieldPath(["memberTimezones", uid]): tz,
+                "updatedAt": FieldValue.serverTimestamp()
+            ])
+            log("memberTimezones[\(uid)] = \(tz)")
+        } catch {
+            log("updateMyTimezone failed: \(error.localizedDescription)")
+        }
+    }
+
     /// Owner: the partner's display name once they've joined, or nil. Reads the
     /// `memberNames` map on the space doc (replaces the CKShare participant poll).
     /// The space-doc listener drives this live in normal operation; this shim covers

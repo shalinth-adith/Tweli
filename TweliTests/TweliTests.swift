@@ -111,6 +111,31 @@ struct TweliTests {
         #expect(label.contains { $0.isNumber })
     }
 
+    // 5 — HAPPY: a reminder's time is a WALL CLOCK. A "9:30 AM" set in one zone
+    // reads as 9:30 AM for a partner in another zone (that's also when it fires).
+    @Test("happy: cross-timezone reminder keeps its wall clock")
+    func reminderWallClockAcrossTimezones() {
+        // Build 9:30 AM on 2026-08-05 in Asia/Kolkata (the "author's" zone).
+        var kolkata = Calendar(identifier: .gregorian)
+        kolkata.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        let nineThirty = kolkata.date(
+            from: DateComponents(year: 2026, month: 8, day: 5, hour: 9, minute: 30))!
+
+        let r = ReminderItem(title: "Take meds", createdBy: UUID(),
+                             coupleSpaceId: UUID(), reminderDate: nineThirty,
+                             authorTimezone: "Asia/Kolkata")
+
+        // Regardless of the test machine's own zone, the localized wall clock is
+        // still 9:30 — the components are preserved, only the instant shifts.
+        #expect(Calendar.current.component(.hour, from: r.localFireDate) == 9)
+        #expect(Calendar.current.component(.minute, from: r.localFireDate) == 30)
+
+        // Legacy reminders (no authorTimezone) keep the raw instant — no shift.
+        let legacy = ReminderItem(title: "Old", createdBy: UUID(),
+                                  coupleSpaceId: UUID(), reminderDate: nineThirty)
+        #expect(legacy.localFireDate == nineThirty)
+    }
+
     /// Encodes a model to a JSON string (as FirebaseService stores it), decodes it
     /// back, and asserts the id and a caller-chosen field survived.
     private func assertRoundTrip<T: Codable & Identifiable>(

@@ -288,6 +288,9 @@ final class AppViewModel: ObservableObject {
                 // Repair the cloud copy of my name (createSpace may have written
                 // the "You" placeholder before "About you" ran).
                 await cloud.updateMyMemberName(coupleSpaceService.currentUser.displayName)
+                // Publish my timezone so the push function can respect the
+                // recipient's quiet hours (silent overnight in their local time).
+                await cloud.updateMyTimezone()
             }
             refreshWidget()
         }

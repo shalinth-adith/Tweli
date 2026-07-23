@@ -35,14 +35,40 @@ final class ReminderService: ObservableObject {
     /// Schedule local notifications for all current reminders. Called once at
     /// startup (NOT from init — init must stay side-effect free, see AppViewModel).
     func scheduleAll() {
-        for r in reminders where !r.isCompleted { notifications.schedule(for: r) }
+        for r in reminders { applySchedule(r) }
+    }
+
+    // MARK: - Notification routing (timezone- & assignment-aware)
+
+    /// Fire (or cancel) the local notification for a reminder on THIS device.
+    /// A completed reminder — or one this device isn't the actor for — is cancelled,
+    /// so re-running is idempotent and assignment/timezone changes self-correct.
+    private func applySchedule(_ r: ReminderItem) {
+        if !r.isCompleted && shouldRing(r) {
+            notifications.reschedule(for: r)   // cancel + schedule
+        } else {
+            notifications.cancel(id: r.id)
+        }
+    }
+
+    /// Whether THIS device should ring for a reminder, based on who it's for:
+    /// `.me` rings only on the creator's device, `.partner` only on the other's,
+    /// `.both` on both. Combined with the wall-clock scheduling in
+    /// `ReminderNotificationService`, a partner-assigned "9:30 AM" fires at 9:30 AM
+    /// in the partner's own timezone — not the setter's.
+    private func shouldRing(_ r: ReminderItem) -> Bool {
+        switch r.assignedTo {
+        case .both:    return true
+        case .me:      return r.createdBy == currentUserId
+        case .partner: return r.createdBy != currentUserId
+        }
     }
 
     // MARK: - CRUD
 
     func add(_ reminder: ReminderItem) {
         reminders.append(reminder)
-        notifications.schedule(for: reminder)
+        applySchedule(reminder)
         Task { await cloud.saveReminder(reminder) }
         onDataChanged?()
     }
@@ -52,7 +78,7 @@ final class ReminderService: ObservableObject {
         var updated = reminder
         updated.updatedAt = Date()
         reminders[i] = updated
-        notifications.reschedule(for: updated)
+        applySchedule(updated)
         Task { await cloud.saveReminder(updated) }
         onDataChanged?()
     }
@@ -74,15 +100,14 @@ final class ReminderService: ObservableObject {
             r.status = .completed
             r.completedBy = currentUserId
             r.completedAt = Date()
-            notifications.cancel(id: r.id)
         } else {
             r.status = .pending
             r.completedBy = nil
             r.completedAt = nil
-            notifications.schedule(for: r)
         }
         r.updatedAt = Date()
         reminders[i] = r
+        applySchedule(r)   // cancels when completed, re-rings when un-completed
         onDataChanged?()
     }
 
@@ -90,10 +115,13 @@ final class ReminderService: ObservableObject {
         guard let i = reminders.firstIndex(where: { $0.id == reminder.id }) else { return }
         var r = reminders[i]
         r.reminderDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
+        // Snooze is an absolute "in N minutes" on THIS device — re-anchor the
+        // wall clock here so localFireDate doesn't re-shift it across zones.
+        r.authorTimezone = TimeZone.current.identifier
         r.status = .snoozed
         r.updatedAt = Date()
         reminders[i] = r
-        notifications.reschedule(for: r)
+        applySchedule(r)
         onDataChanged?()
     }
 
@@ -101,10 +129,12 @@ final class ReminderService: ObservableObject {
         guard let i = reminders.firstIndex(where: { $0.id == reminder.id }) else { return }
         var r = reminders[i]
         r.reminderDate = newDate
+        // The new time is a wall-clock chosen on THIS device — anchor it here.
+        r.authorTimezone = TimeZone.current.identifier
         r.status = .pending
         r.updatedAt = Date()
         reminders[i] = r
-        notifications.reschedule(for: r)
+        applySchedule(r)
         onDataChanged?()
     }
 
@@ -137,11 +167,12 @@ final class ReminderService: ObservableObject {
         for item in items {
             if let i = reminders.firstIndex(where: { $0.id == item.id }) { reminders[i] = item }
             else { reminders.append(item) }
-            // A remote reminder must ring on THIS device too. reschedule() is
-            // cancel+schedule, so it also handles edits and completions (schedule
-            // no-ops on completed items). Without this, partner-created reminders
-            // only got scheduled on the next app launch (bootstrapNotifications).
-            notifications.reschedule(for: item)
+            // A remote reminder must ring on THIS device too — but only if this
+            // device is the intended actor (applySchedule enforces assignment),
+            // and it fires at the reminder's wall clock in THIS device's zone.
+            // Without this, partner-created reminders only got scheduled on the
+            // next app launch (bootstrapNotifications).
+            applySchedule(item)
         }
         for id in deletedIDs where reminders.contains(where: { $0.id == id }) {
             notifications.cancel(id: id)
