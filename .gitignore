@@ -44,3 +44,8 @@ GoogleService-Info.plist
 
 # Firebase CLI local deploy cache
 .firebase/
+
+# Cloud Functions dependencies + local logs
+functions/node_modules/
+functions/firebase-debug.log
+functions/*.local
