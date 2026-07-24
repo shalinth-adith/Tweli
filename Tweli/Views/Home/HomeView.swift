@@ -41,10 +41,10 @@ struct HomeView: View {
 
     // MARK: - Header
 
-    /// "Tuesday · good evening" — weekday + the time-of-day greeting (designs 21a/b).
+    /// "Thursday, good afternoon" — weekday + the time-of-day greeting (designs 21a/b).
     private var dayGreeting: String {
         let weekday = Date().formatted(.dateTime.weekday(.wide))
-        return "\(weekday) · \(app.greeting.lowercased())"
+        return "\(weekday), \(app.greeting.lowercased())"
     }
 
     private var header: some View {
@@ -64,20 +64,23 @@ struct HomeView: View {
                         .font(.title3)
                         .foregroundStyle(.secondary)
                 }
+                .buttonStyle(.plain)   // no tinted glass chrome behind the icon
                 NavigationLink(value: HomeRoute.partner) {
                     avatar(couple.partner)
                 }
+                .buttonStyle(.plain)
             }
         }
     }
 
     private func avatar(_ user: UserProfile?) -> some View {
         Circle()
-            .fill(Color.twAccent2)
-            .frame(width: 42, height: 42)
+            .fill(LinearGradient(colors: [Color(red: 0.482, green: 0.475, blue: 1.0), .twAccent2],
+                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: 38, height: 38)
             .overlay(
                 Text(user?.initials ?? "?")
-                    .font(.headline)
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
             )
     }

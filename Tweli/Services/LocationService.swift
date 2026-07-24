@@ -34,6 +34,26 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     /// Only re-capture our own location if the last fix is older than this.
     private let staleness: TimeInterval = 60 * 60   // 1 hour
 
+    /// DEBUG-only lifecycle logging. Location is capture-driven (unlike moods,
+    /// which are set by hand), so when the "N km apart" line is missing the break
+    /// is almost always in capture/save/merge — these logs pinpoint which. Grep
+    /// the device console for "[Location]".
+    private func log(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        print("[Location] \(message())")
+        #endif
+    }
+
+    /// One-line snapshot of what the distance calc currently sees.
+    private func logState(_ context: String) {
+        #if DEBUG
+        let mine = myLocation.map { "mine(\($0.cityLabel ?? "?") @\($0.latitude),\($0.longitude))" } ?? "mine(nil)"
+        let theirs = partnerLocation.map { "partner(\($0.cityLabel ?? "?") @\($0.latitude),\($0.longitude))" } ?? "partner(nil)"
+        let dist = distanceApartLabel ?? "nil"
+        log("\(context): \(mine) · \(theirs) · distance=\(dist) · records=\(locations.count) · uid=\(currentUserId)")
+        #endif
+    }
+
     init(cloud: FirebaseService) {
         self.cloud = cloud
         self.locations = []
@@ -90,6 +110,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
 
     /// Called from "Use my location". Requests permission if needed, then captures.
     func requestAndCapture() {
+        log("requestAndCapture: status=\(statusName(manager.authorizationStatus))")
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
             captureNow()
@@ -97,7 +118,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
             pendingCapture = true
             manager.requestWhenInUseAuthorization()
         default:
-            break   // denied / restricted → manual city fallback, no distance
+            log("requestAndCapture: denied/restricted → no capture, no distance")
         }
     }
 
@@ -107,6 +128,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     /// .notDetermined, so this becomes a permanent no-op (denied users keep the
     /// manual-city fallback and the "Use my location" button in About you).
     func requestIfNeverAsked() {
+        log("requestIfNeverAsked: status=\(statusName(manager.authorizationStatus))")
         guard manager.authorizationStatus == .notDetermined else { return }
         pendingCapture = true
         manager.requestWhenInUseAuthorization()
@@ -116,13 +138,32 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     /// location only if we're already authorized and the last fix is stale.
     func refreshIfStale() {
         guard manager.authorizationStatus == .authorizedWhenInUse
-            || manager.authorizationStatus == .authorizedAlways else { return }
-        if let mine = myLocation, Date().timeIntervalSince(mine.updatedAt) < staleness { return }
+            || manager.authorizationStatus == .authorizedAlways else {
+            log("refreshIfStale: not authorized (\(statusName(manager.authorizationStatus))) → skip")
+            return
+        }
+        if let mine = myLocation, Date().timeIntervalSince(mine.updatedAt) < staleness {
+            log("refreshIfStale: my fix is fresh (\(Int(Date().timeIntervalSince(mine.updatedAt)))s) → skip")
+            return
+        }
+        log("refreshIfStale: capturing (myLocation=\(myLocation == nil ? "nil" : "stale"))")
         captureNow()
     }
 
     private func captureNow() {
+        log("captureNow: requesting one-shot fix…")
         manager.requestLocation()   // one-shot; delivers didUpdateLocations or didFailWithError
+    }
+
+    private func statusName(_ s: CLAuthorizationStatus) -> String {
+        switch s {
+        case .notDetermined: return "notDetermined"
+        case .restricted: return "restricted"
+        case .denied: return "denied"
+        case .authorizedAlways: return "authorizedAlways"
+        case .authorizedWhenInUse: return "authorizedWhenInUse"
+        @unknown default: return "unknown"
+        }
     }
 
     /// Upsert our own record (stable id per user, like MoodService) and sync it.
@@ -138,7 +179,11 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
                                             longitude: longitude,
                                             cityLabel: cityLabel))
         }
-        if let mine = myLocation { Task { await cloud.saveLocation(mine) } }
+        if let mine = myLocation {
+            log("setMyLocation: saving \(mine.cityLabel ?? "?") @\(mine.latitude),\(mine.longitude) → Firestore")
+            Task { await cloud.saveLocation(mine) }
+        }
+        logState("after setMyLocation")
         onDataChanged?()
     }
 
@@ -151,8 +196,11 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         Task { [weak self] in
             let placemarks = try? await CLGeocoder().reverseGeocodeLocation(location)
             guard let self, let place = placemarks?.first else { return }
-            let label = [place.locality, place.administrativeArea]
-                .compactMap { $0 }.first
+            // "City, Country" for display (e.g. "Chennai, India"). Falls back to
+            // the finest available place name if the locality is missing.
+            let city = place.locality ?? place.subAdministrativeArea ?? place.administrativeArea
+            let joined = [city, place.country].compactMap { $0 }.joined(separator: ", ")
+            let label = joined.isEmpty ? nil : joined
             if let label {
                 self.setMyLocation(latitude: location.coordinate.latitude,
                                    longitude: location.coordinate.longitude,
@@ -164,28 +212,40 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     // MARK: - Remote merge (mirrors MoodService)
 
     func mergeRemote(_ items: [SharedLocation], deletedIDs: [UUID]) {
+        if !items.isEmpty || !deletedIDs.isEmpty {
+            log("mergeRemote: \(items.count) location record(s) in, \(deletedIDs.count) deletion(s); "
+                + "authors=\(items.map { $0.userId == currentUserId ? "me" : "partner" })")
+        }
         for item in items {
             if let i = locations.firstIndex(where: { $0.id == item.id }) { locations[i] = item }
             else { locations.append(item) }
         }
         if !deletedIDs.isEmpty { locations.removeAll { deletedIDs.contains($0.id) } }
+        if !items.isEmpty || !deletedIDs.isEmpty { logState("after mergeRemote") }
     }
 
     // MARK: - CLLocationManagerDelegate (nonisolated → hop to main)
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        Task { @MainActor in self.handle(location) }
+        Task { @MainActor in
+            self.log("didUpdateLocations: got fix @\(location.coordinate.latitude),\(location.coordinate.longitude)")
+            self.handle(location)
+        }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        Task { @MainActor in self.pendingCapture = false }
+        Task { @MainActor in
+            self.log("didFailWithError: \(error.localizedDescription) — no fix captured this attempt")
+            self.pendingCapture = false
+        }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         Task { @MainActor in
             self.authorizationStatus = status
+            self.log("authorization changed → \(self.statusName(status)) (pendingCapture=\(self.pendingCapture))")
             if self.pendingCapture,
                status == .authorizedWhenInUse || status == .authorizedAlways {
                 self.pendingCapture = false

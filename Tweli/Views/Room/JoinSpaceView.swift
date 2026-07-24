@@ -59,6 +59,7 @@ struct JoinSpaceView: View {
                     .frame(width: 34, height: 34)
                     .background(Color.primary.opacity(0.06), in: Circle())
             }
+            .buttonStyle(.plain)
             Spacer()
             HStack(spacing: 6) {
                 Capsule().fill(Brand.pink).frame(width: 22, height: 6)

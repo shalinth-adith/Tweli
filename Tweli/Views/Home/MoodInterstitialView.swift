@@ -5,9 +5,9 @@
 //  The "new mood" interstitial (designs 22a/b): a warm, Tinder-style card that
 //  greets you on open when your partner has posted a new mood since you last
 //  looked. Drag it —
-//    • right  → flings off and opens the Moods tab
-//    • left   → flings off and stays on Home (the mood rests as a card)
-//  Below the threshold it springs back. Tap the × or the scrim to skip.
+//    • right  → KEEP: flings off, the mood stays as the prominent card on Home
+//    • left   → DISMISS: flings off, the mood collapses to the quiet strip
+//  Below the threshold it springs back. Tap the × or the scrim to dismiss.
 //
 //  It is SILENT: nothing is sent to the partner, no receipt, no record of which
 //  way you swiped. The scrim fades and Home brightens as you drag.
@@ -20,9 +20,9 @@ struct MoodInterstitialView: View {
     let mood: MoodStatus
     let partnerName: String
     let partnerInitials: String
-    /// Right swipe / "Moods" — open the Moods tab.
-    var onOpenMoods: () -> Void
-    /// Left swipe / × / scrim tap — dismiss to Home.
+    /// Right swipe — KEEP: leave the mood as the prominent card on Home.
+    var onKeep: () -> Void
+    /// Left swipe / × / scrim tap — DISMISS: collapse the mood to the quiet strip.
     var onDismiss: () -> Void
 
     @State private var drag: CGSize = .zero
@@ -110,7 +110,7 @@ struct MoodInterstitialView: View {
                 .foregroundStyle(.tertiary)
                 .padding(.top, 16)
 
-            Text(mood.mood.label)
+            Text(mood.displayLabel)
                 .font(.system(size: 34, weight: .heavy))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
@@ -130,18 +130,27 @@ struct MoodInterstitialView: View {
     }
 
     private var footer: some View {
-        HStack(alignment: .center, spacing: 20) {
-            footerAction(icon: "chevron.left", label: "Home", tint: Color(UIColor.systemGray)) { onDismiss() }
-
-            VStack(spacing: 0) {
-                Image(systemName: "lock.fill").font(.system(size: 11, weight: .semibold))
-                Text("Private").font(.system(size: 11, weight: .semibold)).padding(.top, 4)
+        VStack(spacing: 10) {
+            // Swipe-direction hints (designs 22a/b) — no action buttons; the card
+            // is driven entirely by the drag.
+            HStack {
+                Label("Swipe left", systemImage: "chevron.left")
+                    .labelStyle(.titleAndIcon)
+                Spacer()
+                Label("Swipe right", systemImage: "chevron.right")
+                    .environment(\.layoutDirection, .rightToLeft)   // icon trails the text
             }
+            .font(.system(size: 12.5, weight: .bold))
             .foregroundStyle(.tertiary)
 
-            footerAction(icon: "face.smiling", label: "Moods", tint: .twSuccess) { onOpenMoods() }
+            HStack(spacing: 6) {
+                Image(systemName: "lock.fill").font(.system(size: 10, weight: .semibold))
+                Text("Only you can see how you respond")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(Color(UIColor.quaternaryLabel))
         }
-        .padding(.top, 16)
+        .padding(.top, 15)
         .frame(maxWidth: .infinity)
         .overlay(alignment: .top) {
             Rectangle().fill(Color(UIColor.separator).opacity(0.5)).frame(height: 1)
@@ -149,44 +158,32 @@ struct MoodInterstitialView: View {
         .padding(.top, 4)
     }
 
-    private func footerAction(icon: String, label: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 34, height: 34)
-                    .background(tint.opacity(0.14))
-                    .clipShape(Circle())
-                Text(label).font(.system(size: 11, weight: .semibold))
-            }
-            .foregroundStyle(tint)
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: - Drag stamps (appear as you pull)
 
     private var moodsStamp: some View {
-        stamp(text: "MOODS", color: .twSuccess, rotation: -15)
+        stamp(text: "KEEP", color: .twSuccess, rotation: -15, systemImage: "heart.fill")
             .opacity(stampOpacity(forRightward: true))
             .padding(.top, 20).padding(.leading, 32)
     }
 
     private var dismissStamp: some View {
-        stamp(text: "DISMISS", color: Color(UIColor.systemGray), rotation: 15)
+        stamp(text: "DISMISS", color: Color(UIColor.systemGray), rotation: 15, systemImage: "xmark")
             .opacity(stampOpacity(forRightward: false))
             .padding(.top, 20).padding(.trailing, 32)
     }
 
-    private func stamp(text: String, color: Color, rotation: Double) -> some View {
-        Text(text)
-            .font(.system(size: 17, weight: .black))
-            .kerning(1)
-            .foregroundStyle(color)
-            .padding(.horizontal, 12).padding(.vertical, 5)
-            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(color, lineWidth: 3))
-            .rotationEffect(.degrees(rotation))
-            .allowsHitTesting(false)
+    private func stamp(text: String, color: Color, rotation: Double, systemImage: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: systemImage).font(.system(size: 13, weight: .black))
+            Text(text)
+                .font(.system(size: 17, weight: .black))
+                .kerning(1)
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 12).padding(.vertical, 5)
+        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(color, lineWidth: 3))
+        .rotationEffect(.degrees(rotation))
+        .allowsHitTesting(false)
     }
 
     private func stampOpacity(forRightward: Bool) -> Double {
@@ -217,23 +214,23 @@ struct MoodInterstitialView: View {
             .onChanged { drag = $0.translation }
             .onEnded { value in
                 if value.translation.width > threshold {
-                    fling(openMoods: true)
+                    fling(keep: true)
                 } else if value.translation.width < -threshold {
-                    fling(openMoods: false)
+                    fling(keep: false)
                 } else {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { drag = .zero }
                 }
             }
     }
 
-    private func fling(openMoods: Bool) {
-        let sign: CGFloat = openMoods ? 1 : -1
+    private func fling(keep: Bool) {
+        let sign: CGFloat = keep ? 1 : -1
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         withAnimation(.easeIn(duration: 0.22)) {
             drag = CGSize(width: sign * 700, height: 60)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            if openMoods { onOpenMoods() } else { onDismiss() }
+            if keep { onKeep() } else { onDismiss() }
         }
     }
 }

@@ -20,6 +20,8 @@ extension Color {
 
     static let twSuccess = Color(UIColor.systemGreen)
     static let twWarn = Color(UIColor.systemOrange)
+    /// Informational blue — the "closeness" distance band (designs 21a/b, #0A84FF).
+    static let twInfo = Color(UIColor.systemBlue)
 
     /// Screen background (--bg).
     static let twBackground = Color(UIColor.systemBackground)

@@ -69,6 +69,31 @@ final class MoodService: ObservableObject {
         defaults.set(mood.updatedAt, forKey: lastSeenPartnerMoodKey)
     }
 
+    // MARK: - Keep vs Dismiss (interstitial swipe, designs 22a/b)
+
+    private let collapsedMoodKey = "tweli.mood.collapsedToStrip"
+
+    /// Right swipe = KEEP → the mood stays as the prominent card on Home.
+    /// Left swipe = DISMISS → it collapses to the quiet strip. Keyed to the mood's
+    /// timestamp so a NEWER partner mood starts fresh (card by default).
+    func setPartnerMoodKept(_ kept: Bool) {
+        guard let mood = partnerMood else { return }
+        if kept {
+            defaults.removeObject(forKey: collapsedMoodKey)
+        } else {
+            defaults.set(mood.updatedAt, forKey: collapsedMoodKey)
+        }
+        objectWillChange.send()   // Home re-picks card vs strip immediately
+    }
+
+    /// True when the CURRENT partner mood was dismissed to the strip. A newer mood
+    /// (different timestamp) reads as not-collapsed → the prominent card returns.
+    var partnerMoodCollapsed: Bool {
+        guard let mood = partnerMood,
+              let d = defaults.object(forKey: collapsedMoodKey) as? Date else { return false }
+        return abs(d.timeIntervalSince(mood.updatedAt)) < 1
+    }
+
     /// Partner's mood across the last 7 days (oldest → newest) for the history bar.
     /// Empty in production; demo data only when a developer opts in.
     var partnerWeekMoods: [PartnerMood] {
@@ -83,13 +108,19 @@ final class MoodService: ObservableObject {
     /// user picks a new mood so their own meter reflects the change live.
     @Published private(set) var myWeekMoods: [PartnerMood] = []
 
-    func setMyMood(_ mood: PartnerMood, note: String? = nil) {
+    func setMyMood(_ mood: PartnerMood, customText: String? = nil, note: String? = nil) {
+        // Normalize an empty/whitespace custom string to nil so `displayLabel`
+        // cleanly falls back to the preset label.
+        let custom = customText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedCustom = (custom?.isEmpty == false) ? custom : nil
         if let i = moods.firstIndex(where: { $0.userId == currentUserId }) {
             moods[i].mood = mood
+            moods[i].customText = normalizedCustom
             moods[i].note = note
             moods[i].updatedAt = Date()
         } else {
-            moods.append(MoodStatus(userId: currentUserId, mood: mood, note: note))
+            moods.append(MoodStatus(userId: currentUserId, mood: mood,
+                                    customText: normalizedCustom, note: note))
         }
         // Reflect today's mood in the user's own 7-day meter.
         if !myWeekMoods.isEmpty { myWeekMoods[myWeekMoods.count - 1] = mood }

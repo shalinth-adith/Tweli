@@ -419,7 +419,10 @@ final class FirebaseService: ObservableObject {
     // MARK: - Generic item CRUD (thin JSON payload)
 
     private func save<T: Codable>(_ item: T, id: UUID, type: String) async {
-        guard role != .none, !isDevOrOffline, let spaceId else { return }
+        guard role != .none, !isDevOrOffline, let spaceId else {
+            log("save \(type) SKIPPED (role=\(role) devOrOffline=\(isDevOrOffline) space=\(spaceId ?? "nil"))")
+            return
+        }
         do {
             let data = try JSONEncoder().encode(item)
             guard let payload = String(data: data, encoding: .utf8) else { return }
@@ -431,6 +434,7 @@ final class FirebaseService: ObservableObject {
                     "updatedAt": FieldValue.serverTimestamp(),
                     "schemaVersion": 1
                 ])
+            log("save \(type) ok (\(id.uuidString.prefix(8)))")
         } catch {
             log("save \(type) failed: \(error.localizedDescription)")
         }

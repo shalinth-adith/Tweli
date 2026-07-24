@@ -73,10 +73,12 @@ struct MeetDateSheetView: View {
             Button { step(-1) } label: {
                 Image(systemName: "chevron.left").font(.system(size: 14, weight: .bold))
             }
+            .buttonStyle(.plain)
             .disabled(cal.isDate(month, equalTo: today, toGranularity: .month))
             Button { step(1) } label: {
                 Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold))
             }
+            .buttonStyle(.plain)
             .padding(.leading, 14)
         }
         .foregroundStyle(.primary)

@@ -140,9 +140,9 @@ enum MockData {
         [
             // You in London · Anaya in Chennai → ~8,250 km apart.
             SharedLocation(userId: shalinthId, latitude: 51.5074, longitude: -0.1278,
-                           cityLabel: "London", updatedAt: Date().addingTimeInterval(-1800)),
+                           cityLabel: "London, UK", updatedAt: Date().addingTimeInterval(-1800)),
             SharedLocation(userId: anayaId, latitude: 13.0827, longitude: 80.2707,
-                           cityLabel: "Chennai", updatedAt: Date().addingTimeInterval(-3600))
+                           cityLabel: "Chennai, India", updatedAt: Date().addingTimeInterval(-3600))
         ]
     }
 

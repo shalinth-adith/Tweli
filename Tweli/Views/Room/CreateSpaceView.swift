@@ -75,6 +75,7 @@ struct CreateSpaceView: View {
                     .frame(width: 34, height: 34)
                     .background(Color.primary.opacity(0.06), in: Circle())
             }
+            .buttonStyle(.plain)
             Spacer()
             HStack(spacing: 6) {
                 Capsule().fill(active == 0 ? Brand.pink : Color.primary.opacity(0.18))

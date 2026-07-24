@@ -4,189 +4,101 @@
 //
 //  The partner's mood as it rests on Home (designs 21a/b — light/dark). This is
 //  the calm state you land on AFTER the full-screen "new mood" interstitial
-//  (MoodInterstitialView, designs 22a/b) is swiped away. It is static — NOT
-//  swipeable. Two tap targets: the ❤️ N-days chip opens the "When do you meet?"
-//  sheet; tapping anywhere else opens the Moods tab.
+//  (MoodInterstitialView, designs 22a/b) is swiped away.
+//
+//  Per 21a/b the card owns ONE thing — the mood: a "From <partner>" eyebrow, the
+//  partner avatar + "<partner> feels" + the big mood word, and (if present) an
+//  italic note under a hairline. Distance and the meet-date countdown live in
+//  their own sibling cards below (ClosenessStripView / the Dates card), not here.
+//  Tapping anywhere opens the Moods tab.
 //
 
 import SwiftUI
-
-/// The "N km apart" line on the mood card (designs 21a/b). `nil` until both
-/// partners have shared a location — the card then shows a sentimental fallback.
-struct FreshMoodDistance {
-    let label: String       // "8,432 km"
-    let route: String?      // "Chennai ↔ London" (partner ↔ you)
-    let updated: String?    // "1h ago"
-}
 
 struct FreshMoodCardView: View {
     let mood: MoodStatus
     let partnerName: String
     let partnerInitials: String
-    /// Days until the reunion (nil ⇒ no meet date set yet → chip prompts to add one).
-    let daysRemaining: Int?
-    /// How far apart the two of you are (nil ⇒ show the sentimental footer instead).
-    let distance: FreshMoodDistance?
     /// Tap the card body — open the Moods tab.
     var onTap: () -> Void
-    /// Tap the ❤️ chip — open the "When do you meet?" sheet.
-    var onCountdownTap: () -> Void
-
-    @State private var pulsing = false
 
     var body: some View {
         card
             .contentShape(Rectangle())
             .onTapGesture { onTap() }
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                    pulsing = true
-                }
-            }
     }
 
     // MARK: - Card
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
+            eyebrow
             content
-            footer
+            if let note = mood.note, !note.isEmpty {
+                noteRow(note)
+            }
         }
-        .padding(EdgeInsets(top: 17, leading: 18, bottom: 15, trailing: 18))
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(UIColor.secondarySystemGroupedBackground))   // white / #1C1C1E
-        .overlay(alignment: .top) {
-            // 3px indigo→pink accent bar hugging the top edge.
-            LinearGradient(colors: [.twAccent2, .twAccent], startPoint: .leading, endPoint: .trailing)
-                .frame(height: 3)
-        }
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: Color.twAccent.opacity(0.18), radius: 26, x: 0, y: 16)
+        .shadow(color: Color.twAccent.opacity(0.12), radius: 24, x: 0, y: 16)
         .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 1)
     }
 
-    // MARK: - Header ("From <partner>" + ❤️ days chip)
+    // MARK: - Eyebrow ("FROM <PARTNER>")
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(Color.twAccent)
-                .frame(width: 9, height: 9)
-                .scaleEffect(pulsing ? 1 : 0.55)
-                .opacity(pulsing ? 1 : 0.5)
-            Text("From \(partnerName)")
-                .font(.system(size: 11, weight: .heavy))
-                .textCase(.uppercase)
-                .kerning(0.7)
-                .foregroundStyle(Color.twAccent)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Spacer(minLength: 4)
-            countdownChip
-        }
-        .padding(.bottom, 13)
-    }
-
-    private var countdownChip: some View {
-        Button(action: onCountdownTap) {
-            HStack(spacing: 4) {
-                Text("❤️").font(.system(size: 12))
-                Text(daysRemaining.map { "\($0) days" } ?? "Set date")
-                    .font(.system(size: 11, weight: .bold))
-            }
+    private var eyebrow: some View {
+        Text("From \(partnerName)")
+            .font(.system(size: 11, weight: .heavy))
+            .textCase(.uppercase)
+            .kerning(0.8)
             .foregroundStyle(Color.twAccent)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.twAccent.opacity(0.1))
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.bottom, 16)
     }
 
-    // MARK: - Body (avatar + mood + note)
+    // MARK: - Body (avatar + "<partner> feels" + big mood)
 
     private var content: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .center, spacing: 16) {
             Circle()
                 .fill(LinearGradient(colors: [Color(red: 0.482, green: 0.475, blue: 1.0), .twAccent2],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 48, height: 48)
-                .overlay(Text(partnerInitials).font(.system(size: 19, weight: .semibold)).foregroundStyle(.white))
-                .shadow(color: Color.twAccent2.opacity(0.32), radius: 10, x: 0, y: 5)
+                .frame(width: 50, height: 50)
+                .overlay(Text(partnerInitials).font(.system(size: 21, weight: .semibold)).foregroundStyle(.white))
+                .shadow(color: Color.twAccent2.opacity(0.32), radius: 8, x: 0, y: 6)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("\(partnerName) feels")
                     .font(.system(size: 11, weight: .bold))
                     .textCase(.uppercase)
-                    .kerning(0.5)
+                    .kerning(0.6)
                     .foregroundStyle(.tertiary)
-                Text(mood.mood.label)
-                    .font(.system(size: 26, weight: .heavy))
+                Text(mood.displayLabel)
+                    .font(.system(size: 30, weight: .heavy))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                if let note = mood.note, !note.isEmpty {
-                    Text("“\(note)”")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 5)
-                }
+                    .minimumScaleFactor(0.7)
             }
         }
     }
 
-    // MARK: - Footer ("N km apart", or a sentimental fallback)
+    // MARK: - Note (italic, under a hairline)
 
-    @ViewBuilder private var footer: some View {
-        Group {
-            if let distance {
-                distanceRow(distance)
-            } else {
-                sentimentalRow
-            }
-        }
-        .padding(.top, 14)
-        .overlay(alignment: .top) {
+    private func noteRow(_ note: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             Rectangle().fill(Color(UIColor.separator).opacity(0.5)).frame(height: 1)
+            Text("“\(note)”")
+                .font(.system(size: 14))
+                .italic()
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 18)   // room for the caption to breathe below the line
         }
-    }
-
-    private func distanceRow(_ distance: FreshMoodDistance) -> some View {
-        HStack(spacing: 10) {
-            LocationPinIcon(size: 20, color: .twAccent)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("\(distance.label) apart")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.primary)
-                if let route = distance.route {
-                    Text(route)
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 4)
-            if let updated = distance.updated {
-                HStack(spacing: 3) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                    Text(updated)
-                }
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.tertiary)
-            }
-        }
-    }
-
-    private var sentimentalRow: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "lock.fill").font(.system(size: 11, weight: .semibold))
-            Text("Thinking of you across the miles ♡")
-                .font(.system(size: 11.5, weight: .semibold))
-        }
-        .foregroundStyle(.tertiary)
-        .frame(maxWidth: .infinity)
+        .padding(.top, 18)           // and room above the line, off the mood word
     }
 }

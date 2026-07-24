@@ -46,12 +46,13 @@ final class AppViewModel: ObservableObject {
         freshMood = fresh
     }
 
-    /// Dismiss the fresh-mood card. Acknowledges the mood (so it won't re-raise)
-    /// and collapses to the strip; a right swipe additionally opens the Moods tab.
-    func dismissFreshMood(openMoods: Bool) {
+    /// Resolve the fresh-mood interstitial (designs 22a/b). Always acknowledges the
+    /// mood so it won't re-raise. `keep` (right swipe) leaves the prominent mood
+    /// card on Home; otherwise (left swipe / × / scrim) it collapses to the strip.
+    func dismissFreshMood(keep: Bool) {
         moodService.acknowledgePartnerMood()
+        moodService.setPartnerMoodKept(keep)
         freshMood = nil
-        if openMoods { requestedTab = 3 }
     }
 
     /// A pairing code delivered by an invite link (universal https link or the
@@ -70,7 +71,7 @@ final class AppViewModel: ObservableObject {
         guard url.scheme == "tweli" else { return }
         switch url.host {
         case "sendlove", "mood":
-            requestedTab = 3            // Moods tab
+            requestedTab = 2            // Moods tab
             focusMoodMessage = true
         case "join":
             applyInvite(from: url)
@@ -224,7 +225,7 @@ final class AppViewModel: ObservableObject {
             daysUntil: cd?.daysRemaining ?? 0,
             countdownTitle: cd?.title ?? "No countdown yet",
             partnerName: coupleSpaceService.partner?.displayName ?? "Partner",
-            partnerMood: mood?.mood.label ?? "—",
+            partnerMood: mood?.displayLabel ?? "—",
             partnerMoodEmoji: mood?.mood.emoji ?? "💗",
             nextDateTitle: date?.title ?? "No date planned",
             nextDateTime: date.map { $0.date.formatted(date: .omitted, time: .shortened) } ?? "—",

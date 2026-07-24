@@ -2,8 +2,9 @@
 //  MainTabView.swift
 //  Tweli
 //
-//  The five-tab bar from the design: Home · Reminders · Dates · Moods · Letters.
-//  Countdown / Missing You / Partner / Settings are pushed or presented from Home.
+//  The tab bar: Home · Reminders · Moods · Letters. Dates are no longer a tab —
+//  they live in a half-sheet opened from the Home "Dates" card. Countdown /
+//  Missing You / Partner / Settings are pushed or presented from Home.
 //
 
 import SwiftUI
@@ -24,14 +25,11 @@ struct MainTabView: View {
                 NavigationStack { ReminderListView() }
                     .tabItem { Label("Reminders", systemImage: "checklist") }.tag(1)
 
-                NavigationStack { VirtualDatePlannerView() }
-                    .tabItem { Label("Dates", systemImage: "calendar") }.tag(2)
-
                 NavigationStack { MoodSharingView() }
-                    .tabItem { Label("Moods", systemImage: "face.smiling") }.tag(3)
+                    .tabItem { Label("Moods", systemImage: "face.smiling") }.tag(2)
 
                 NavigationStack { OpenWhenLettersView() }
-                    .tabItem { Label("Letters", systemImage: "envelope.fill") }.tag(4)
+                    .tabItem { Label("Letters", systemImage: "envelope.fill") }.tag(3)
             }
             // Home dims + shrinks behind the mood interstitial ("stepping in").
             .scaleEffect(interstitialUp ? 0.94 : 1)
@@ -42,8 +40,8 @@ struct MainTabView: View {
                     mood: mood,
                     partnerName: app.partner?.displayName ?? "Your partner",
                     partnerInitials: app.partner?.initials ?? "?",
-                    onOpenMoods: { app.dismissFreshMood(openMoods: true) },
-                    onDismiss: { app.dismissFreshMood(openMoods: false) }
+                    onKeep: { app.dismissFreshMood(keep: true) },
+                    onDismiss: { app.dismissFreshMood(keep: false) }
                 )
                 .transition(.opacity)
                 .zIndex(1)
@@ -70,12 +68,28 @@ struct MainTabView: View {
         .task {
             // Ask for notification permission once the user is in the app, then
             // schedule all reminder + countdown alerts (guarded to run once).
+            #if DEBUG
+            // Verification screenshot builds skip permission prompts so they
+            // don't cover the UI being captured (TWELI_NO_LOCATION_ASK).
+            if ProcessInfo.processInfo.environment["TWELI_NO_LOCATION_ASK"] != "1" {
+                await app.notifications.requestAuthorization()
+            }
+            #else
             await app.notifications.requestAuthorization()
+            #endif
             app.bootstrapNotifications()
             app.syncNow()   // pull any CloudKit changes for the couple space
             // Location powers the "N km apart" row on the Home mood card: ask on
             // first entry into the session, then keep the fix fresh hourly.
+            #if DEBUG
+            // Verification builds screenshot the distance sheet headlessly; skip
+            // the system location prompt so it doesn't cover the globe.
+            if ProcessInfo.processInfo.environment["TWELI_NO_LOCATION_ASK"] != "1" {
+                app.locationService.requestIfNeverAsked()
+            }
+            #else
             app.locationService.requestIfNeverAsked()
+            #endif
             app.locationService.refreshIfStale()   // refresh our shared location if stale
         }
     }

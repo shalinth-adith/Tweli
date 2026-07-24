@@ -17,17 +17,31 @@ struct MoodSharingView: View {
 
     /// Staged pick — live in the preview, committed only by the Share button.
     @State private var selected: PartnerMood?
+    /// Free-text "type your own mood" (designs 24a/b). When non-empty it overrides
+    /// the preset label in the preview and is what the partner sees.
+    @State private var customMood = ""
     @State private var message = ""
     @State private var justShared = false
     @FocusState private var messageFocused: Bool
+    @FocusState private var customFocused: Bool
 
     /// Keeps the message short enough to sit comfortably on the widget.
     private let messageLimit = 80
+    /// A typed mood is a headline, not a sentence — keep it short so it fits the
+    /// large preview type and the partner's home card.
+    private let customLimit = 24
 
     private var partnerName: String { app.partner?.displayName ?? "Your partner" }
 
-    /// What the preview shows: the staged pick, else the currently shared mood.
+    /// The preset mood backing the pick — drives tint / the stored `mood` enum even
+    /// when a custom label is shown.
     private var previewMood: PartnerMood { selected ?? service.myMood?.mood ?? .missingYou }
+
+    private var trimmedCustom: String { customMood.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// What the "partner will see" preview shows: the typed mood if present, else
+    /// the selected preset's label.
+    private var previewLabel: String { trimmedCustom.isEmpty ? previewMood.label : trimmedCustom }
 
     private var trimmedMessage: String { message.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -49,6 +63,7 @@ struct MoodSharingView: View {
         .safeAreaInset(edge: .bottom) { shareBar }
         .onAppear {
             if selected == nil { selected = service.myMood?.mood }
+            if customMood.isEmpty, let existing = service.myMood?.customText { customMood = existing }
             if message.isEmpty, let existing = service.myMood?.note { message = existing }
             if app.focusMoodMessage { messageFocused = true; app.focusMoodMessage = false }
         }
@@ -94,13 +109,15 @@ struct MoodSharingView: View {
                     )
             }
 
-            Text(previewMood.label)
+            Text(previewLabel)
                 .font(.system(size: 34, weight: .heavy))
                 .kerning(-1)
                 .foregroundStyle(.primary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
                 .padding(.top, 20)
                 .contentTransition(.opacity)
-                .animation(.easeInOut(duration: 0.16), value: previewMood)
+                .animation(.easeInOut(duration: 0.16), value: previewLabel)
 
             if !trimmedMessage.isEmpty {
                 Text("\u{201C}\(trimmedMessage)\u{201D}")
@@ -132,14 +149,51 @@ struct MoodSharingView: View {
                     chip(mood)
                 }
             }
+
+            customInput
         }
         .padding(.top, 30)
     }
 
+    /// "Type your own mood…" — a free-text alternative to the preset chips
+    /// (designs 24a/b). Typing overrides the preview label and deselects the chips.
+    private var customInput: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "pencil.line")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Brand.pink)
+            TextField("Type your own mood…", text: $customMood)
+                .font(.system(size: 15, weight: .semibold))
+                .focused($customFocused)
+                .submitLabel(.done)
+                .onChange(of: customMood) { _, new in
+                    if new.count > customLimit { customMood = String(new.prefix(customLimit)) }
+                    justShared = false
+                }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule().strokeBorder(
+                Color.primary.opacity(trimmedCustom.isEmpty ? 0.14 : 0), lineWidth: 1)
+        )
+        .overlay(
+            Capsule().strokeBorder(
+                Brand.pink.opacity(trimmedCustom.isEmpty ? 0 : 0.9), lineWidth: 1.5)
+        )
+    }
+
     private func chip(_ mood: PartnerMood) -> some View {
-        let on = previewMood == mood
+        // A typed custom mood takes over — the chips visually deselect.
+        let on = trimmedCustom.isEmpty && previewMood == mood
         return Button {
-            withAnimation(.easeInOut(duration: 0.16)) { selected = mood }
+            withAnimation(.easeInOut(duration: 0.16)) {
+                selected = mood
+                customMood = ""          // preset replaces any typed mood
+            }
+            customFocused = false
             justShared = false
         } label: {
             Text(mood.label)
@@ -212,8 +266,11 @@ struct MoodSharingView: View {
 
     private func share() {
         let mood = previewMood
-        service.setMyMood(mood, note: trimmedMessage.isEmpty ? nil : trimmedMessage)
+        service.setMyMood(mood,
+                          customText: trimmedCustom.isEmpty ? nil : trimmedCustom,
+                          note: trimmedMessage.isEmpty ? nil : trimmedMessage)
         messageFocused = false
+        customFocused = false
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         withAnimation(.snappy) { justShared = true }
         Task {

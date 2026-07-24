@@ -16,7 +16,7 @@ struct MoodStripView: View {
 
     var body: some View {
         if let mood = moods.partnerMood {
-            Button { app.requestedTab = 3 } label: {
+            Button { app.requestedTab = 2 } label: {
                 HStack(spacing: 9) {
                     Circle()
                         .fill(Color.twAccent2.opacity(0.5))
@@ -26,7 +26,7 @@ struct MoodStripView: View {
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.white)
                         )
-                    Text("\(app.partner?.displayName ?? "Your partner")'s feeling \(mood.mood.label.lowercased())")
+                    Text("\(app.partner?.displayName ?? "Your partner")'s feeling \(mood.displayLabel.lowercased())")
                         .font(.system(size: 13.5, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
