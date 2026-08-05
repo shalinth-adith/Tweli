@@ -20,10 +20,10 @@ struct RootView: View {
         ZStack {
             if app.showSplash {
                 // The splash owns its own timing and reports when the comp's
-                // sequence has finished. Previously the root cut it off after a
-                // fixed 2.5s, which landed right as the wordmark arrived — the
-                // animation never got to complete.
-                SplashView { app.showSplash = false }
+                // sequence has finished — the root must not cut it short. It
+                // hands over at full opacity; the cross-fade below is the only
+                // transition, so the screen never dips through empty background.
+                SplashView { withAnimation(.easeInOut(duration: 0.45)) { app.showSplash = false } }
                     .transition(.opacity)
             } else if let failure = app.fatalSyncError {
                 // Comp E8. Only unrecoverable sync failures land here; being
@@ -58,9 +58,7 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.35), value: couple.isConnected)
         .animation(.easeInOut(duration: 0.35), value: app.partnerLeftName)
         .animation(.easeInOut(duration: 0.35), value: app.fatalSyncError)
-        // The splash fades itself out, so the root only needs to swap what's
-        // underneath — a second cross-fade here would double the dissolve.
-        .animation(.easeInOut(duration: 0.25), value: app.showSplash)
+
         .sheet(item: $app.pendingInvite) { invite in
             JoinConfirmView(invite: invite)
                 .environmentObject(app)

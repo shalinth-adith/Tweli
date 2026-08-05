@@ -4,28 +4,33 @@
 //
 //  Comp T1 (dark) / T1L (lite) — "Splash, T1 locked as canon". The thread and
 //  nothing else: two lit endpoints, the curve drawing itself between them, then
-//  the wordmark, the tagline, and the loader arriving in that order.
+//  the wordmark and the tagline arriving in that order.
 //
 //  Timing is taken from the comp's keyframes, which run on a 7s loop:
 //
 //      thread   draws  4% → 32%   (0.28s → 2.24s)
 //      wordmark rises 20% → 32%   (1.40s → 2.24s)
 //      tagline  rises 30% → 42%   (2.10s → 2.94s)
-//      loader   fades 38% → 48%   (2.66s → 3.36s)
-//      everything holds to 85%, gone by 93%
 //
-//  The entry runs at exactly those times. What differs is the tail: the comp
-//  holds for another 2.6s only so its loop reads clearly on the design canvas.
-//  Here the app is waiting behind the splash, so the hold is trimmed to 0.6s
-//  before the same fade-out. Nothing is cut short — `onFinished` fires only
-//  after the fade completes, so the app never appears mid-animation.
+//  Two departures, both requested:
+//
+//  1. The comp's three loader dots at the bottom are gone. They were a
+//     progress affordance for a splash that loops forever on a design canvas;
+//     here the thread finishing IS the progress.
+//  2. The splash no longer fades itself out. Fading its own sky to zero dipped
+//     the screen through empty background before Home arrived — a visible dim
+//     mid-transition. It now hands off at full opacity and the root cross-fades
+//     straight from splash to app, so nothing darkens on the way.
+//
+//  `onFinished` still fires only after the sequence has played in full, so the
+//  app never appears mid-animation.
 //
 
 import SwiftUI
 import UIKit
 
 struct SplashView: View {
-    /// Called once the whole sequence — including the fade-out — has finished.
+    /// Called once the whole sequence has played and rested.
     var onFinished: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
@@ -33,15 +38,13 @@ struct SplashView: View {
     @State private var threadDrawn = false
     @State private var wordIn = false
     @State private var tagIn = false
-    @State private var loaderIn = false
-    @State private var fadingOut = false
 
     // Comp keyframe times, in seconds on the 7s cycle.
     private let threadStart = 0.28, threadEnd = 2.24
     private let wordStart = 1.40
-    private let tagStart = 2.10
-    private let loaderStart = 2.66, loaderEnd = 3.36
-    private let hold = 0.60, fade = 0.50
+    private let tagStart = 2.10, tagEnd = 2.94
+    /// How long the finished composition rests before handing over.
+    private let hold = 0.55
 
     private var p: SplashPalette { scheme == .dark ? .dark : .light }
 
@@ -78,15 +81,7 @@ struct SplashView: View {
                     .opacity(tagIn ? 1 : 0)
                     .offset(y: tagIn ? 0 : 12)
             }
-
-            VStack {
-                Spacer()
-                loader
-                    .opacity(loaderIn ? 1 : 0)
-                    .padding(.bottom, 60)
-            }
         }
-        .opacity(fadingOut ? 0 : 1)
         .task { await run() }
     }
 
@@ -107,15 +102,11 @@ struct SplashView: View {
         withAnimation(.easeOut(duration: threadEnd - wordStart)) { wordIn = true }
 
         await wait(tagStart - wordStart)
-        withAnimation(.easeOut(duration: 0.84)) { tagIn = true }
+        withAnimation(.easeOut(duration: tagEnd - tagStart)) { tagIn = true }
 
-        await wait(loaderStart - tagStart)
-        withAnimation(.easeOut(duration: loaderEnd - loaderStart)) { loaderIn = true }
-
-        await wait((loaderEnd - loaderStart) + hold)
-        withAnimation(.easeInOut(duration: fade)) { fadingOut = true }
-
-        await wait(fade)
+        // Rest on the finished composition, then hand over at full opacity —
+        // the root cross-fades, so there is no dip through an empty screen.
+        await wait((tagEnd - tagStart) + hold)
         onFinished()
     }
 
@@ -137,16 +128,6 @@ struct SplashView: View {
                 .position(x: 30, y: 102)
             PulsingDot(size: 13, color: p.dotEnd, glow: p.endGlow, radius: 7, delay: 1.3)
                 .position(x: 210, y: 28)
-        }
-    }
-
-    // MARK: - Loader
-
-    private var loader: some View {
-        HStack(spacing: 7) {
-            PulsingDot(size: 6, color: p.dotStart, glow: .clear, radius: 0, delay: 0)
-            PulsingDot(size: 6, color: p.loaderMid, glow: .clear, radius: 0, delay: 0.2)
-            PulsingDot(size: 6, color: p.dotEnd, glow: .clear, radius: 0, delay: 0.4)
         }
     }
 
@@ -186,8 +167,7 @@ private struct ThreadCurve: Shape {
     }
 }
 
-/// Comp `tw-pulse`: scale 1 → 1.08, opacity 1 → 0.85. The endpoints run it over
-/// 2.6s, the loader dots over 1.2s.
+/// Comp `tw-pulse`: scale 1 → 1.08, opacity 1 → 0.85, over 2.6s.
 private struct PulsingDot: View {
     let size: CGFloat
     let color: Color
@@ -206,7 +186,7 @@ private struct PulsingDot: View {
             .opacity(on ? 0.85 : 1)
             .onAppear {
                 // Half-period, because autoreverse supplies the return trip.
-                withAnimation(.easeInOut(duration: size > 8 ? 1.3 : 0.6)
+                withAnimation(.easeInOut(duration: 1.3)
                     .repeatForever(autoreverses: true)
                     .delay(delay)) { on = true }
             }
@@ -250,7 +230,6 @@ private struct SplashPalette {
     let threadGlow: Color
     let word: Color
     let tagline: Color
-    let loaderMid: Color
     let thirdTwinkle: Color
     let twinkleSize: CGFloat
 
@@ -263,7 +242,6 @@ private struct SplashPalette {
         threadGlow: c(0xFF375F).opacity(0.4),
         word: .white,
         tagline: Color(UIColor.twLabel(0.45)),
-        loaderMid: Color(UIColor.twLabel(0.4)),
         thirdTwinkle: .white,
         twinkleSize: 3
     )
@@ -277,7 +255,6 @@ private struct SplashPalette {
         threadGlow: c(0xFF375F).opacity(0.25),
         word: c(0x1C1C1E),
         tagline: c(0x8E8E93),
-        loaderMid: c(0x8E8E93).opacity(0.55),
         thirdTwinkle: c(0xFF9F0A),
         twinkleSize: 4
     )
