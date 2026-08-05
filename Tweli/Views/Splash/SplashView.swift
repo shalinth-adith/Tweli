@@ -189,13 +189,13 @@ private struct SplashPalette {
     let loading: [Color]
 
     static let light = SplashPalette(
-        bg: [splashRGB(0xFFFFFF), splashRGB(0xF4F3FF), splashRGB(0xFFEFF2)],
+        bg: [splashRGB(0xF2F0FF), splashRGB(0xFFF6F8), splashRGB(0xFFF3ED)],
         tile: [splashRGB(0xFFFFFF), splashRGB(0xF1F0FF)],
         tileShadow: splashRGB(0x5E5CE6).opacity(0.18),
         glow: splashRGB(0x5E5CE6).opacity(0.16),
-        dot1: splashRGB(0x5E5CE6), dot2: splashRGB(0xFF2D55),
-        word: splashRGB(0x1C1C1E), subtitle: splashRGB(0x8E8E93),
-        loading: [splashRGB(0x5E5CE6), splashRGB(0xB58AE6), splashRGB(0xFF2D55)]
+        dot1: splashRGB(0x7B79FF), dot2: splashRGB(0xFF5E7E),
+        word: splashRGB(0x1C1C1E), subtitle: splashRGB(0x6D6D72),
+        loading: [splashRGB(0x5E5CE6), splashRGB(0xB58AE6), splashRGB(0xE8325A)]
     )
 
     static let dark = SplashPalette(

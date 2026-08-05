@@ -61,7 +61,7 @@ struct VirtualDateDetailView: View {
         CardView {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "text.quote").foregroundStyle(Color.twAccent2)
-                Text(current.notes).font(.callout).foregroundStyle(.primary)
+                Text(current.notes).font(.callout).foregroundStyle(Color.twInk)
             }
         }
     }
@@ -83,9 +83,9 @@ struct VirtualDateDetailView: View {
     private func row(_ icon: String, _ label: String, _ value: String, tint: Color = .twAccent2) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon).foregroundStyle(tint).frame(width: 24)
-            Text(label).foregroundStyle(.secondary)
+            Text(label).foregroundStyle(Color.twInkSecondary)
             Spacer()
-            Text(value).fontWeight(.semibold).foregroundStyle(.primary)
+            Text(value).fontWeight(.semibold).foregroundStyle(Color.twInk)
         }
         .font(.subheadline)
         .padding(.horizontal, 16).padding(.vertical, 14)

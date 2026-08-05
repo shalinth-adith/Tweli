@@ -46,7 +46,7 @@ struct MissingYouView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Send a little love").font(.title2.weight(.bold))
             Text("A tiny ping travels straight to \(app.partner?.displayName ?? "your partner").")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(.subheadline).foregroundStyle(Color.twInkSecondary)
         }
     }
 
@@ -55,7 +55,7 @@ struct MissingYouView: View {
             Image(systemName: preset.sfSymbol)
                 .font(.system(size: 26, weight: .semibold))
                 .foregroundStyle(Color.twAccent)
-            Text(preset.rawValue).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+            Text(preset.rawValue).font(.subheadline.weight(.semibold)).foregroundStyle(Color.twInk)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
@@ -70,9 +70,9 @@ struct MissingYouView: View {
                 HStack(spacing: 12) {
                     Image(systemName: ping.sentBy == app.currentUser.id ? "arrow.up.right" : "arrow.down.left")
                         .font(.caption).foregroundStyle(ping.sentBy == app.currentUser.id ? Color.twAccent2 : Color.twAccent)
-                    Text(ping.message).font(.subheadline).foregroundStyle(.primary)
+                    Text(ping.message).font(.subheadline).foregroundStyle(Color.twInk)
                     Spacer()
-                    Text(ping.relativeLabel).font(.caption2).foregroundStyle(.tertiary)
+                    Text(ping.relativeLabel).font(.caption2).foregroundStyle(Color.twInkTertiary)
                 }
                 .padding(12)
                 .tweliCard()

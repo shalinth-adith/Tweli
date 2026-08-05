@@ -2,10 +2,10 @@
 //  MoodSharingView.swift
 //  Tweli
 //
-//  Design 24a/24b — "Mood composer II", typography-first. No emoji, no faces:
-//  the words carry the feeling. A live "what your partner will see" preview sets
-//  the chosen mood in large expressive type, chips stage the pick, and a single
-//  bottom CTA shares mood + note together. Partner's mood lives on Home, not here.
+//  Comp L4 / N4 — "Moods", typography-first. No emoji, no faces: the words carry
+//  the feeling. A live "what your partner will see" preview sets the chosen mood
+//  in large expressive type, chips stage the pick, and a single bottom CTA shares
+//  mood + note together. Partner's mood lives on Home, not here.
 //
 
 import SwiftUI
@@ -31,17 +31,29 @@ struct MoodSharingView: View {
     /// large preview type and the partner's home card.
     private let customLimit = 24
 
+    /// Sentence-initial form ("Anaya will see" / "Your partner will see").
     private var partnerName: String { app.partner?.displayName ?? "Your partner" }
+    /// Mid-sentence form ("Send to Anaya" / "Send to your partner").
+    private var partnerNameInline: String { app.partner?.displayName ?? "your partner" }
 
     /// The preset mood backing the pick — drives tint / the stored `mood` enum even
     /// when a custom label is shown.
-    private var previewMood: PartnerMood { selected ?? service.myMood?.mood ?? .missingYou }
+    /// The staged pick, or whatever we last shared. `nil` until the user has
+    /// actually chosen something — the composer never pre-selects a feeling on
+    /// their behalf.
+    private var previewMood: PartnerMood? { selected ?? service.myMood?.mood }
 
     private var trimmedCustom: String { customMood.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     /// What the "partner will see" preview shows: the typed mood if present, else
     /// the selected preset's label.
-    private var previewLabel: String { trimmedCustom.isEmpty ? previewMood.label : trimmedCustom }
+    private var previewLabel: String {
+        if !trimmedCustom.isEmpty { return trimmedCustom }
+        return previewMood?.label ?? "Pick a feeling"
+    }
+
+    /// Send is only possible once there is a feeling to send.
+    private var canSend: Bool { previewMood != nil || !trimmedCustom.isEmpty }
 
     private var trimmedMessage: String { message.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -58,7 +70,7 @@ struct MoodSharingView: View {
             .padding(.bottom, 24)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+        .background(Color.twBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom) { shareBar }
         .onAppear {
@@ -76,15 +88,16 @@ struct MoodSharingView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("MOODS")
+            Text("Moods")
                 .font(.system(size: 12, weight: .bold))
-                .kerning(1.2)
-                .foregroundStyle(Brand.pink)
+                .textCase(.uppercase)
+                .tracking(1.2)
+                .foregroundStyle(Color.twAccentInk)
             Text("How are you\nfeeling?")
                 .font(.system(size: 33, weight: .heavy))
-                .kerning(-0.8)
+                .tracking(-0.8)
                 .lineSpacing(1)
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.twInk)
         }
     }
 
@@ -93,26 +106,26 @@ struct MoodSharingView: View {
     private var previewCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("\(partnerName.uppercased()) WILL SEE")
+                Text("\(partnerName) will see")
                     .font(.system(size: 11, weight: .bold))
-                    .kerning(1.4)
-                    .foregroundStyle(.tertiary)
+                    .textCase(.uppercase)
+                    .tracking(1.4)
+                    .foregroundStyle(Color.twInkTertiary)
                 Spacer()
                 Circle()
-                    .fill(LinearGradient(colors: [Brand.indigoLift, Brand.indigo],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .fill(TweliGradient.meAvatar)
                     .frame(width: 30, height: 30)
-                    .overlay(
+                    .overlay {
                         Text(app.currentUser.initials.isEmpty ? "♡" : app.currentUser.initials)
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(.white)
-                    )
+                    }
             }
 
             Text(previewLabel)
                 .font(.system(size: 34, weight: .heavy))
-                .kerning(-1)
-                .foregroundStyle(.primary)
+                .tracking(-1)
+                .foregroundStyle(canSend ? Color.twInk : Color.twInkQuaternary)
                 .lineLimit(2)
                 .minimumScaleFactor(0.7)
                 .padding(.top, 20)
@@ -124,24 +137,24 @@ struct MoodSharingView: View {
                     .font(.system(size: 14.5))
                     .italic()
                     .lineSpacing(3)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.twInkSecondary)
                     .padding(.top, 12)
             }
         }
         .padding(.init(top: 22, leading: 22, bottom: 24, trailing: 22))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .tweliCard(radius: 22, hero: true)
     }
 
     // MARK: - Feeling chips
 
     private var chipSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("CHOOSE A FEELING")
+            Text("Choose a feeling")
                 .font(.system(size: 12, weight: .bold))
-                .kerning(1)
-                .foregroundStyle(.tertiary)
+                .textCase(.uppercase)
+                .tracking(1)
+                .foregroundStyle(Color.twInkTertiary)
                 .padding(.horizontal, 2)
 
             FlowLayout(spacing: 10) {
@@ -161,9 +174,10 @@ struct MoodSharingView: View {
         HStack(spacing: 10) {
             Image(systemName: "pencil.line")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Brand.pink)
+                .foregroundStyle(Color.twAccentInk)
             TextField("Type your own mood…", text: $customMood)
                 .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.twInk)
                 .focused($customFocused)
                 .submitLabel(.done)
                 .onChange(of: customMood) { _, new in
@@ -171,18 +185,15 @@ struct MoodSharingView: View {
                     justShared = false
                 }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
-        .clipShape(Capsule())
-        .overlay(
-            Capsule().strokeBorder(
-                Color.primary.opacity(trimmedCustom.isEmpty ? 0.14 : 0), lineWidth: 1)
-        )
-        .overlay(
-            Capsule().strokeBorder(
-                Brand.pink.opacity(trimmedCustom.isEmpty ? 0 : 0.9), lineWidth: 1.5)
-        )
+        .background(Color.twElevated)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(trimmedCustom.isEmpty ? Color.twHairline : Color.twAccent,
+                              lineWidth: trimmedCustom.isEmpty ? 1 : 1.5)
+        }
     }
 
     private func chip(_ mood: PartnerMood) -> some View {
@@ -197,12 +208,18 @@ struct MoodSharingView: View {
             justShared = false
         } label: {
             Text(mood.label)
-                .font(.system(size: 14.5, weight: on ? .bold : .semibold))
-                .foregroundStyle(on ? .white : Color.primary.opacity(0.72))
-                .padding(.horizontal, 17).padding(.vertical, 11)
-                .background(on ? Brand.pink : .clear, in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.primary.opacity(on ? 0 : 0.18), lineWidth: 1))
-                .shadow(color: on ? Brand.pink.opacity(0.4) : .clear, radius: 10, x: 0, y: 6)
+                .font(.system(size: 15, weight: on ? .bold : .semibold))
+                .foregroundStyle(on ? Color.white : Color.twInkChip)
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .background(on ? Color.twAccent : Color.twElevated,
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(on ? .clear : Color.twHairline, lineWidth: 1)
+                }
+                // Comp: box-shadow 0 0 22px rgba(255,55,95,0.4) — the selected
+                // chip is the only thing on the screen that glows.
+                .shadow(color: on ? Color.twAccent.opacity(0.4) : .clear, radius: 11)
         }
         .buttonStyle(.plain)
     }
@@ -212,14 +229,15 @@ struct MoodSharingView: View {
     private var noteSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("ADD A NOTE (OPTIONAL)")
+                Text("Add a line")
                     .font(.system(size: 12, weight: .bold))
-                    .kerning(1)
-                    .foregroundStyle(.tertiary)
+                    .textCase(.uppercase)
+                    .tracking(1)
+                    .foregroundStyle(Color.twInkTertiary)
                 Spacer()
-                Text("\(message.count) / \(messageLimit) characters")
+                Text("\(message.count) / \(messageLimit)")
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(message.count >= messageLimit ? Brand.pink : Color(UIColor.tertiaryLabel))
+                    .foregroundStyle(message.count >= messageLimit ? Color.twAccentInk : Color.twInkQuaternary)
             }
             .padding(.horizontal, 2)
 
@@ -231,8 +249,13 @@ struct MoodSharingView: View {
                     if new.count > messageLimit { message = String(new.prefix(messageLimit)) }
                 }
                 .padding(16)
-                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .foregroundStyle(Color.twInk)
+                .background(Color.twElevated)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.twHairline, lineWidth: 1)
+                }
         }
         .padding(.top, 30)
     }
@@ -244,28 +267,33 @@ struct MoodSharingView: View {
             Button {
                 share()
             } label: {
-                Text(justShared ? "Shared ♡" : "Share with \(partnerName)")
-                    .font(.system(size: 17, weight: .bold))
+                Text(justShared ? "Shared ♡" : "Send to \(partnerNameInline)")
+                    .font(.system(size: 16.5, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(Brand.pink, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .shadow(color: Brand.pink.opacity(0.42), radius: 16, x: 0, y: 8)
+                    .frame(height: 54)
+                    .background(Brand.cta(), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: Color.twAccent.opacity(0.35), radius: 15)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle())
+            .disabled(!canSend)
+            .opacity(canSend ? 1 : 0.5)
 
             Text("Updates instantly on their home widget")
                 .font(.system(size: 12.5))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color.twInkTertiary)
         }
         .padding(.horizontal, 22)
         .padding(.top, 10)
         .padding(.bottom, 6)
-        .background(Color(UIColor.systemGroupedBackground).opacity(0.94))
+        .background(Color.twBackground.opacity(0.94))
     }
 
     private func share() {
-        let mood = previewMood
+        // Guarded by `canSend`; a typed mood with no chip still needs a stored
+        // enum, and "missing you" is the closest neutral bucket for free text.
+        guard let mood = previewMood ?? (trimmedCustom.isEmpty ? nil : PartnerMood.allCases.first)
+        else { return }
         service.setMyMood(mood,
                           customText: trimmedCustom.isEmpty ? nil : trimmedCustom,
                           note: trimmedMessage.isEmpty ? nil : trimmedMessage)

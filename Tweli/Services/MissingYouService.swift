@@ -20,9 +20,6 @@ final class MissingYouService: ObservableObject {
     init(cloud: FirebaseService) {
         self.cloud = cloud
         self.pings = []
-#if DEBUG
-        if AppEnvironment.useDemoData { self.pings = MockData.pings }
-#endif
     }
 
     /// Most recent first, for the history list.

@@ -19,9 +19,6 @@ final class CountdownService: ObservableObject {
         self.cloud = cloud
         self.notifications = notifications
         self.countdowns = []
-#if DEBUG
-        if AppEnvironment.useDemoData { self.countdowns = MockData.countdowns }
-#endif
     }
 
     /// Schedule "the day is here" alerts for all current countdowns. Called once

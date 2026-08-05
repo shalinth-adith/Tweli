@@ -25,11 +25,11 @@ struct CountdownRing: View {
             VStack(spacing: 0) {
                 Text("\(days)")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.twInk)
                 if showsLabel {
                     Text("days")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Color.twInkTertiary)
                         .textCase(.uppercase)
                 }
             }

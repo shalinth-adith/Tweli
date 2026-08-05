@@ -18,16 +18,16 @@ struct CountdownCardView: View {
                 Image(systemName: countdown.category.sfSymbol).foregroundStyle(Color.twAccent2)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(countdown.title).font(.body.weight(.semibold)).foregroundStyle(.primary)
+                Text(countdown.title).font(.body.weight(.semibold)).foregroundStyle(Color.twInk)
                 Text(countdown.targetDate.formatted(date: .abbreviated, time: .omitted))
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Color.twInkSecondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 0) {
                 Text("\(countdown.daysRemaining)")
                     .font(.title2.weight(.heavy))
                     .foregroundStyle(Color.twAccent)
-                Text("days").font(.caption2).foregroundStyle(.tertiary)
+                Text("days").font(.caption2).foregroundStyle(Color.twInkTertiary)
             }
             if let onPin {
                 Button(action: onPin) {

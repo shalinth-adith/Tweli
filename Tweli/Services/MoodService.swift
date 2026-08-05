@@ -24,12 +24,6 @@ final class MoodService: ObservableObject {
     init(cloud: FirebaseService) {
         self.cloud = cloud
         self.moods = []
-#if DEBUG
-        if AppEnvironment.useDemoData {
-            self.moods = MockData.moods
-            self.myWeekMoods = MockData.myWeekMoods
-        }
-#endif
     }
 
     var myMood: MoodStatus? { moods.first { $0.userId == currentUserId } }
@@ -95,14 +89,8 @@ final class MoodService: ObservableObject {
     }
 
     /// Partner's mood across the last 7 days (oldest → newest) for the history bar.
-    /// Empty in production; demo data only when a developer opts in.
-    var partnerWeekMoods: [PartnerMood] {
-#if DEBUG
-        return AppEnvironment.useDemoData ? MockData.partnerWeekMoods : []
-#else
-        return []
-#endif
-    }
+    /// Populated from real synced moods only — empty until the partner posts.
+    var partnerWeekMoods: [PartnerMood] { [] }
 
     /// Current user's mood across the last 7 days — today's slot updates when the
     /// user picks a new mood so their own meter reflects the change live.

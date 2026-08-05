@@ -62,9 +62,6 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyKilometer   // coarse / city-level
         authorizationStatus = manager.authorizationStatus
-#if DEBUG
-        if AppEnvironment.useDemoData { self.locations = MockData.locations }
-#endif
     }
 
     // MARK: - Per-user records (mirrors MoodService)
@@ -167,17 +164,20 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     /// Upsert our own record (stable id per user, like MoodService) and sync it.
-    private func setMyLocation(latitude: Double, longitude: Double, cityLabel: String?) {
+    private func setMyLocation(latitude: Double, longitude: Double,
+                               cityLabel: String?, timeZoneId: String? = nil) {
         if let i = locations.firstIndex(where: { $0.userId == currentUserId }) {
             locations[i].latitude = latitude
             locations[i].longitude = longitude
             if let cityLabel { locations[i].cityLabel = cityLabel }
+            if let timeZoneId { locations[i].timeZoneId = timeZoneId }
             locations[i].updatedAt = Date()
         } else {
             locations.append(SharedLocation(userId: currentUserId,
                                             latitude: latitude,
                                             longitude: longitude,
-                                            cityLabel: cityLabel))
+                                            cityLabel: cityLabel,
+                                            timeZoneId: timeZoneId))
         }
         if let mine = myLocation {
             log("setMyLocation: saving \(mine.cityLabel ?? "?") @\(mine.latitude),\(mine.longitude) → Firestore")
@@ -201,10 +201,14 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
             let city = place.locality ?? place.subAdministrativeArea ?? place.administrativeArea
             let joined = [city, place.country].compactMap { $0 }.joined(separator: ", ")
             let label = joined.isEmpty ? nil : joined
-            if let label {
+            // The placemark also carries the zone at those coordinates, which is
+            // what lets the partner's device say "It's 11:04 PM in Abu Dhabi".
+            let zone = place.timeZone?.identifier
+            if label != nil || zone != nil {
                 self.setMyLocation(latitude: location.coordinate.latitude,
                                    longitude: location.coordinate.longitude,
-                                   cityLabel: label)
+                                   cityLabel: label,
+                                   timeZoneId: zone)
             }
         }
     }

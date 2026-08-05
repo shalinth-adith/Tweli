@@ -16,26 +16,88 @@ import Foundation
 @Suite("18-firebase-migration invite flow")
 struct TweliTests {
 
-    // 1 — HAPPY: pair codes normalize to a canonical uppercase form and the code
-    // alphabet is the unambiguous 6-char set the invite contract promises.
-    @Test("happy: pair-code normalization + alphabet contract")
+    // 1 — HAPPY: pair codes normalize to a canonical uppercase form and round-trip
+    // through the TWLI-4821 display format the comp (A5/A6) specifies.
+    @Test("happy: pair-code normalization + TWLI-4821 format contract")
     func pairCodeNormalizationContract() {
-        // Both a hyphenated lowercase code and a space-separated uppercase code
-        // collapse to the same canonical uppercase code.
-        #expect(FirebaseService.normalizePairCode("7gk-4pb") == "7GK4PB")
-        #expect(FirebaseService.normalizePairCode("7GK 4PB") == "7GK4PB")
-        // A code the user types with stray separators still normalizes to 6 chars.
-        #expect(FirebaseService.normalizePairCode("7gk-4pb").count == 6)
+        // Hyphens, spaces and lowercase all collapse to the stored document id.
+        // (The comp's literal "TWLI" isn't usable — I and L are excluded as
+        // digit look-alikes — so the shape is exercised with a mintable code.)
+        #expect(FirebaseService.normalizePairCode("twnk-4821") == "TWNK4821")
+        #expect(FirebaseService.normalizePairCode("TWNK 4821") == "TWNK4821")
+        #expect(FirebaseService.normalizePairCode("twnk-4821").count == FirebaseService.codeLength)
 
-        // The alphabet excludes the visually ambiguous glyphs (0/O, 1/I/L) and is
-        // entirely uppercase — so a normalized code can only contain these chars.
-        let alphabet = FirebaseService.codeAlphabet
-        for banned in ["0", "O", "1", "I", "L"] {
-            #expect(!alphabet.contains(Character(banned)))
+        // Display form re-inserts the hyphen after the four letters.
+        #expect(FirebaseService.formatPairCode("twnk4821") == "TWNK-4821")
+        // Normalize ∘ format is the identity on the stored form.
+        #expect(FirebaseService.normalizePairCode(FirebaseService.formatPairCode("TWNK4821")) == "TWNK4821")
+
+        // Letters exclude the glyphs that read as digits; digits are unambiguous
+        // BECAUSE O/I/L are absent from the letter set.
+        for banned in ["O", "I", "L"] {
+            #expect(!FirebaseService.codeLetters.contains(Character(banned)))
         }
+        let alphabet = FirebaseService.codeAlphabet
         #expect(alphabet.allSatisfy { $0.isUppercase || $0.isNumber })
-        // Every character produced by normalization is drawn from the alphabet.
-        #expect(FirebaseService.normalizePairCode("7GK4PB").allSatisfy { alphabet.contains($0) })
+        #expect(FirebaseService.normalizePairCode("TWNK4821").allSatisfy { alphabet.contains($0) })
+
+        // Legacy 6-character invites must still be enterable, alongside new ones.
+        #expect(FirebaseService.isPlausiblePairCode("7GK4PB"))
+        #expect(FirebaseService.isPlausiblePairCode("TWNK-4821"))
+        #expect(!FirebaseService.isPlausiblePairCode("TWNK"))
+    }
+
+    // 1a — ERROR: a minted code must always be normalizable back to itself.
+    // Guards the alphabet and the generator from drifting apart.
+    @Test("error: every minted pair code round-trips through normalize/format")
+    func mintedPairCodesRoundTrip() {
+        for _ in 0..<200 {
+            let code = FirebaseService.makeCode()
+            #expect(code.count == FirebaseService.codeLength)
+            #expect(FirebaseService.normalizePairCode(code) == code)
+            #expect(FirebaseService.normalizePairCode(FirebaseService.formatPairCode(code)) == code)
+            #expect(FirebaseService.isPlausiblePairCode(code))
+        }
+    }
+
+    // 1b — HAPPY: the reminder notification routing matrix. `assignedTo` is
+    // written from the CREATOR's point of view, so the same stored reminder must
+    // ring on a different set of phones depending on who is reading it.
+    @Test("happy: reminder rings on exactly the assigned devices")
+    func reminderNotificationRouting() {
+        let creator = UUID()
+        let partner = UUID()
+
+        func reminder(_ who: ReminderAssignee) -> ReminderItem {
+            var r = ReminderItem(title: "Take your vitamins", createdBy: creator,
+                                 coupleSpaceId: UUID(), reminderDate: Date())
+            r.assignedTo = who
+            return r
+        }
+
+        // Set for myself → only my phone rings.
+        #expect(ReminderService.shouldRing(reminder(.me), currentUserId: creator))
+        #expect(!ReminderService.shouldRing(reminder(.me), currentUserId: partner))
+
+        // Set for my partner → only THEIR phone rings, never mine.
+        #expect(!ReminderService.shouldRing(reminder(.partner), currentUserId: creator))
+        #expect(ReminderService.shouldRing(reminder(.partner), currentUserId: partner))
+
+        // Set for both → both phones ring.
+        #expect(ReminderService.shouldRing(reminder(.both), currentUserId: creator))
+        #expect(ReminderService.shouldRing(reminder(.both), currentUserId: partner))
+
+        // Symmetry: the same rules hold when the OTHER person is the author, so
+        // "user 2 sets it for both" behaves identically to "user 1 sets it for both".
+        var theirs = ReminderItem(title: "Evening call", createdBy: partner,
+                                  coupleSpaceId: UUID(), reminderDate: Date())
+        theirs.assignedTo = .both
+        #expect(ReminderService.shouldRing(theirs, currentUserId: creator))
+        #expect(ReminderService.shouldRing(theirs, currentUserId: partner))
+
+        theirs.assignedTo = .me          // they kept it for themselves
+        #expect(!ReminderService.shouldRing(theirs, currentUserId: creator))
+        #expect(ReminderService.shouldRing(theirs, currentUserId: partner))
     }
 
     // 2 — ERROR: every PairCodeError case carries the exact user-facing copy the

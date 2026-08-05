@@ -59,7 +59,7 @@ struct DistanceJourneyView: View {
         .padding(.horizontal, 20).padding(.top, 26).padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // #F2F2F7 grouped grey so the white stat tiles read as cards (design).
-        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+        .background(Color.twBackground.ignoresSafeArea())
         .presentationDetents([.fraction(0.62)])
         .presentationDragIndicator(.visible)
         .onAppear { planeStart = Date() }
@@ -194,7 +194,7 @@ struct DistanceJourneyView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12).padding(.horizontal, 6)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(Color.twElevated)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
     }

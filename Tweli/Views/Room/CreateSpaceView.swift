@@ -46,13 +46,31 @@ struct CreateSpaceView: View {
         }
         return lines.joined(separator: "\n")
     }
-    private var displayCode: String {
-        pairCode.count == 6 ? "\(pairCode.prefix(3))-\(pairCode.suffix(3))" : pairCode
+    /// "TWLI4821" → "TWLI-4821" (comp A5).
+    private var displayCode: String { FirebaseService.formatPairCode(pairCode) }
+
+    /// The code's own deadline — comp A5 "Expires in 48 hours", comp E3 once past.
+    private var expiresAt: Date? { app.cloud.pairCodeExpiresAt }
+    private var isExpired: Bool { expiresAt.map { $0 < Date() } ?? false }
+
+    /// "Expires in 41 hours" / "Expires in 24 minutes".
+    private var expiryLine: String {
+        guard let expiresAt else { return "Opens your space exactly once" }
+        let secs = expiresAt.timeIntervalSinceNow
+        if secs <= 0 {
+            let ago = -secs
+            let h = Int(ago) / 3600
+            return h >= 1 ? "Expired \(h) hour\(h == 1 ? "" : "s") ago" : "Expired just now"
+        }
+        let hours = Int(secs) / 3600
+        if hours >= 1 { return "Expires in \(hours) hour\(hours == 1 ? "" : "s")" }
+        let mins = max(1, Int(secs) / 60)
+        return "Expires in \(mins) minute\(mins == 1 ? "" : "s")"
     }
 
     var body: some View {
         ZStack {
-            Color(UIColor.systemGroupedBackground).ignoresSafeArea()
+            Color.twBackground.ignoresSafeArea()
             switch step {
             case .name:   nameStep
             case .invite: inviteStep
@@ -70,17 +88,17 @@ struct CreateSpaceView: View {
                 if step == .invite { withAnimation { step = .name } } else { dismiss() }
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.twInk)
                     .frame(width: 34, height: 34)
-                    .background(Color.primary.opacity(0.06), in: Circle())
+                    .background(Color.twInkTertiary.opacity(0.22), in: Circle())
             }
             .buttonStyle(.plain)
             Spacer()
             HStack(spacing: 6) {
-                Capsule().fill(active == 0 ? Brand.pink : Color.primary.opacity(0.18))
+                Capsule().fill(active == 0 ? Color.twAccent : Color.twInkTertiary.opacity(0.3))
                     .frame(width: active == 0 ? 22 : 6, height: 6)
-                Capsule().fill(active == 1 ? Brand.pink : Color.primary.opacity(0.18))
+                Capsule().fill(active == 1 ? Color.twAccent : Color.twInkTertiary.opacity(0.3))
                     .frame(width: active == 1 ? 22 : 6, height: 6)
             }
             Spacer()
@@ -101,11 +119,11 @@ struct CreateSpaceView: View {
 
                     VStack(spacing: 8) {
                         Text("Name your space")
-                            .font(.system(size: 28, weight: .heavy)).kerning(-0.6)
-                            .foregroundStyle(.primary)
+                            .font(.system(size: 28, weight: .heavy)).tracking(-0.6)
+                            .foregroundStyle(Color.twInk)
                         Text("One shared world for the two of you.\nYou can change it anytime.")
                             .font(.system(size: 14.5))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.twInkSecondary)
                             .multilineTextAlignment(.center)
                     }
                     .padding(.top, 24)
@@ -115,7 +133,7 @@ struct CreateSpaceView: View {
 
                     if let error {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote).foregroundStyle(Brand.pink)
+                            .font(.footnote).foregroundStyle(Color.twAccentInk)
                             .padding(.top, 14)
                     }
                 }
@@ -134,7 +152,7 @@ struct CreateSpaceView: View {
                     if let onSwitchToJoin { onSwitchToJoin() } else { dismiss() }
                 }
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.twInkSecondary)
                 .frame(height: 40)
             }
             .padding(.horizontal, 20)
@@ -146,30 +164,31 @@ struct CreateSpaceView: View {
         HStack(spacing: 0) {
             ProfileAvatar(profile: couple.currentUser, isPartner: false, size: 58)
             Image(systemName: "ellipsis")
-                .font(.title3).foregroundStyle(.tertiary)
+                .font(.title3).foregroundStyle(Color.twInkTertiary)
                 .padding(.horizontal, 10)
             Circle()
                 .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [5]))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color.twInkTertiary)
                 .frame(width: 58, height: 58)
-                .overlay(Image(systemName: "plus").font(.system(size: 20, weight: .semibold)).foregroundStyle(.tertiary))
+                .overlay(Image(systemName: "plus").font(.system(size: 20, weight: .semibold)).foregroundStyle(Color.twInkTertiary))
         }
     }
 
     private var nameField: some View {
         HStack(spacing: 10) {
-            Image(systemName: "heart.fill").foregroundStyle(Brand.pink)
+            Image(systemName: "heart.fill").foregroundStyle(Color.twAccent)
             TextField("Our space", text: $spaceName)
                 .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color.twInk)
                 .submitLabel(.done)
         }
         .padding(17)
-        .background(Color(UIColor.secondarySystemGroupedBackground),
+        .background(Color.twElevated,
                     in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
+        .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Brand.pink.opacity(0.35), lineWidth: 1.5)
-        )
+                .strokeBorder(Color.twAccent.opacity(0.35), lineWidth: 1.5)
+        }
     }
 
     /// Name suggestions — deliberately name-free so nothing is hardcoded.
@@ -179,67 +198,103 @@ struct CreateSpaceView: View {
                 Button { spaceName = s } label: {
                     Text(s)
                         .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(Brand.indigo)
+                        .foregroundStyle(Color.twAccent2)
                         .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(Brand.indigo.opacity(0.1), in: Capsule())
+                        .background(Color.twAccent2Soft, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
         }
     }
 
-    // MARK: - Step 2 · Invite code (19e/19f)
+    // MARK: - Step 2 · Invite code (comp A5, and E3 once it expires)
 
     private var inviteStep: some View {
         VStack(spacing: 0) {
             header(active: 1)
-            Spacer()
+            Spacer(minLength: 8)
             VStack(spacing: 0) {
-                Circle()
-                    .fill(Brand.green.opacity(0.15))
-                    .frame(width: 64, height: 64)
-                    .overlay(Image(systemName: "checkmark").font(.system(size: 26, weight: .heavy)).foregroundStyle(Brand.green))
+                ZStack {
+                    Circle()
+                        .fill(isExpired ? Color.twWarn.opacity(0.15) : Color.twSuccess.opacity(0.15))
+                        .frame(width: 64, height: 64)
+                    Image(systemName: isExpired ? "clock.badge.exclamationmark" : "checkmark")
+                        .font(.system(size: isExpired ? 27 : 26, weight: .heavy))
+                        .foregroundStyle(isExpired ? Color.twWarn : Color.twSuccess)
+                }
 
-                Text("Your space is ready")
-                    .font(.system(size: 28, weight: .heavy)).kerning(-0.6)
-                    .foregroundStyle(.primary)
+                Text(isExpired ? "This code expired" : "Invite your partner")
+                    .font(.system(size: 28, weight: .heavy)).tracking(-0.6)
+                    .foregroundStyle(Color.twInk)
                     .padding(.top, 18)
-                Text("Share this code with your partner\nto join \(title).")
+
+                Text(isExpired
+                     ? "Codes last 48 hours so only the right person can use them. Nothing was lost."
+                     : "Send this code any way you like. It opens \(title) exactly once.")
                     .font(.system(size: 14.5))
-                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
+                    .foregroundStyle(Color.twInkSecondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 8)
 
-                codeTiles.padding(.top, 28)
-                shareButtons.padding(.top, 20)
+                Text(isExpired ? "Old code" : "Your code")
+                    .tweliEyebrow()
+                    .tracking(1.2)
+                    .padding(.top, 28)
+
+                codeTiles.padding(.top, 10).opacity(isExpired ? 0.45 : 1)
+
+                Text(expiryLine)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(isExpired ? Color.twWarnInk : Color.twInkTertiary)
+                    .padding(.top, 12)
+
+                if !isExpired { shareButtons.padding(.top, 20) }
             }
             .padding(.horizontal, 24)
-            Spacer()
+            Spacer(minLength: 8)
 
             VStack(spacing: 10) {
-                BrandCTA(title: "Continue") { app.beginOwnerWaiting(title: title) }
-                Text("You don't have to wait — they can join anytime.")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.tertiary)
+                if isExpired {
+                    BrandCTA(title: creating ? "Minting a new code…" : "Generate a fresh code",
+                             loading: creating, showsArrow: false) {
+                        Task { await regenerate() }
+                    }
+                    .disabled(creating)
+                } else {
+                    BrandCTA(title: "Continue") { app.beginOwnerWaiting(title: title) }
+                    Text("You don't have to wait — they can join anytime.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.twInkTertiary)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
         }
     }
 
+    /// Eight monospaced tiles split 4 + 4, mirroring the entry screen.
     private var codeTiles: some View {
-        HStack(spacing: 7) {
-            let chars = Array(pairCode)
+        HStack(spacing: 5) {
+            let chars = Array(displayCode.filter { $0 != "-" })
             ForEach(Array(chars.enumerated()), id: \.offset) { idx, ch in
-                if idx == 3 {
-                    Capsule().fill(Color.primary.opacity(0.2)).frame(width: 12, height: 3)
+                if idx == 4 {
+                    Capsule()
+                        .fill(Color.twInkTertiary.opacity(0.35))
+                        .frame(width: 10, height: 3)
+                        .padding(.horizontal, 2)
                 }
                 Text(String(ch))
-                    .font(.system(size: 26, weight: .bold, design: .monospaced))
-                    .foregroundStyle(idx < 3 ? .primary : Color(Brand.pink))
-                    .frame(width: 44, height: 56)
-                    .background(Color(UIColor.secondarySystemGroupedBackground),
-                                in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .font(.system(size: 21, weight: .bold, design: .monospaced))
+                    .foregroundStyle(idx < 4 ? Color.twInk : Color.twAccentInk)
+                    .frame(width: 34, height: 48)
+                    .background(Color.twElevated,
+                                in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .strokeBorder(Color.twHairline, lineWidth: 1)
+                    }
             }
         }
     }
@@ -247,32 +302,48 @@ struct CreateSpaceView: View {
     private var shareButtons: some View {
         HStack(spacing: 10) {
             Button {
-                UIPasteboard.general.string = pairCode
+                UIPasteboard.general.string = displayCode
                 withAnimation { copied = true }
                 Task { try? await Task.sleep(nanoseconds: 1_500_000_000); withAnimation { copied = false } }
             } label: {
-                tile(copied ? "Copied" : "Copy code", icon: copied ? "checkmark" : "doc.on.doc", tint: Brand.indigo)
+                actionTile(copied ? "Copied" : "Copy code",
+                           icon: copied ? "checkmark" : "doc.on.doc",
+                           tint: .twAccent2)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle())
 
             ShareLink(item: shareMessage) {
-                tile("Share invite", icon: "square.and.arrow.up", tint: Brand.pink)
+                actionTile("Share code", icon: "square.and.arrow.up", tint: .twAccent)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle())
         }
     }
 
-    private func tile(_ text: String, icon: String, tint: Color) -> some View {
+    private func actionTile(_ text: String, icon: String, tint: Color) -> some View {
         HStack(spacing: 7) {
             Image(systemName: icon).font(.system(size: 15, weight: .semibold))
             Text(text).font(.system(size: 15, weight: .semibold))
         }
         .foregroundStyle(tint)
         .frame(maxWidth: .infinity).frame(height: 48)
-        .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     // MARK: - Backend
+
+    /// Comp E3 — mint a brand-new code and drop the expired one.
+    private func regenerate() async {
+        creating = true
+        error = nil
+        defer { creating = false }
+        do {
+            pairCode = try await app.cloud.regeneratePairCode(spaceTitle: title)
+        } catch let e as FirebaseService.PairCodeError {
+            error = e.localizedDescription
+        } catch {
+            self.error = "Couldn't refresh your code: \(error.localizedDescription)"
+        }
+    }
 
     private func createSpace() async {
         creating = true

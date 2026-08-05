@@ -10,37 +10,23 @@
 import Foundation
 
 struct WidgetSnapshot: Codable, Equatable {
-    var daysUntil: Int
-    var countdownTitle: String
-    var partnerName: String
-    var partnerMood: String
-    var partnerMoodEmoji: String
-    var nextDateTitle: String
-    var nextDateTime: String
-    // Partner's mood note — the custom message that sits on the "Two of us" widget.
-    var partnerMoodNote: String = ""
-    // Reunion progress 0…1 for the widget's S———A thread (heart position).
+    /// Whole days until the reunion — the pill on the medium widget's thread.
+    var daysUntil: Int = 0
+    /// Reunion progress 0…1 — where the heart sits on the S———A thread.
     var countdownProgress: Double = 0
-    var userInitial: String = "You"   // left dot on the "Two of us" thread
-    // Latest missing-you ping (reflects a "send love" tap in the widget).
-    var lastPingMessage: String = "Send a little love"
-    var lastPingFrom: String = "—"
-    var lastPingWhen: String = ""
+    /// The right-hand dot and the "<name> feels" eyebrow.
+    var partnerName: String = "Your partner"
+    /// The mood in plain words. Empty ⇒ nothing shared yet; the widget says so.
+    var partnerMood: String = ""
+    /// The message quoted beneath the mood.
+    var partnerMoodNote: String = ""
+    /// Initials for the left dot on the thread.
+    var userInitial: String = ""
 
-    static let placeholder = WidgetSnapshot(
-        daysUntil: 21,
-        countdownTitle: "Until we meet again",
-        partnerName: "Your partner",
-        partnerMood: "Missing you",
-        partnerMoodEmoji: "🥺",
-        nextDateTitle: "Your next date",
-        nextDateTime: "9:30 PM",
-        partnerMoodNote: "Wish you were here right now",
-        countdownProgress: 0.64,
-        lastPingMessage: "Missing you ❤️",
-        lastPingFrom: "Your partner",
-        lastPingWhen: "2h ago"
-    )
+    /// Shown in the widget gallery and before the App Group has any data. It
+    /// invents nothing — no mood, no message, no day count — so the preview is
+    /// the app's genuine empty state rather than a staged one.
+    static let placeholder = WidgetSnapshot()
 
     static let appGroupId = "group.me.adithyan.shalinth.Tweli"
     static let snapshotKey = "tweli.widget.snapshot"

@@ -2,69 +2,51 @@
 //  AppEnvironment.swift
 //  Tweli
 //
-//  Single source of truth for "is this a developer build showing demo data?".
+//  Build-environment flags.
 //
-//  Two guarantees for a no-compromise production build:
-//   1. `useDemoData` is compiled to a constant `false` in any non-DEBUG build
-//      (Release / TestFlight / App Store) — the demo path is unreachable.
-//   2. Even in DEBUG it is OFF by default. A developer must explicitly opt in
-//      (SignIn "dev mode" button or the Debug-only Settings toggle). So a plain
-//      Debug run also boots into the real, clean onboarding.
+//  This app ships with ZERO seeded data. There is no mock/demo content anywhere
+//  in the codebase — every service starts empty and fills only from real synced
+//  records, so a fresh install shows the comp's genuine empty states (E5, E7)
+//  rather than a populated screen.
+//
+//  The one remaining hook below is DEBUG-only and seeds no content whatsoever:
+//  it flips the onboarding-complete flags so a headless simulator can reach the
+//  main tabs for screenshots, since CI simulators cannot inject the taps that
+//  onboarding requires.
 //
 
 import Foundation
 
 enum AppEnvironment {
-    private static let demoKey = "tweli.dev.demoData"
-
-    /// True only when: this is a DEBUG build AND a developer explicitly enabled
-    /// demo data. Always `false` in a distribution build.
-    static var useDemoData: Bool {
-        #if DEBUG
-        return UserDefaults.standard.bool(forKey: demoKey)
-        #else
-        return false
-        #endif
-    }
-
-    /// Turn demo/mock data on (DEBUG only — a no-op in distribution builds).
-    static func enableDemoData() {
-        #if DEBUG
-        UserDefaults.standard.set(true, forKey: demoKey)
-        #endif
-    }
-
-    /// Turn demo/mock data off.
-    static func disableDemoData() {
-        UserDefaults.standard.set(false, forKey: demoKey)
-    }
 
 #if DEBUG
-    /// Verification hook (DEBUG only, absent from distribution builds). When the
-    /// app is launched with `TWELI_DEMO=1` in its environment — e.g.
-    /// `SIMCTL_CHILD_TWELI_DEMO=1 xcrun simctl launch …` — seed the fully
-    /// connected demo state so a headless build boots straight to Home instead of
-    /// onboarding (which needs taps the CI simulator can't perform). Add
-    /// `TWELI_FRESH_MOOD=1` to also surface the inline fresh-mood card by clearing
-    /// the acknowledged baseline. Must run before any service reads UserDefaults,
-    /// so call it from `TweliApp.init()`.
+    /// Verification hook (DEBUG only, compiled out of every distribution build).
+    /// Launched with `TWELI_SKIP_ONBOARDING=1` — e.g.
+    /// `SIMCTL_CHILD_TWELI_SKIP_ONBOARDING=1 xcrun simctl launch …` — this marks
+    /// first-run setup as done so the app opens on the main tabs.
+    ///
+    /// It writes NO content: no moods, reminders, letters, dates or partner. The
+    /// app lands on Home in its true empty state. Must run before any service
+    /// reads UserDefaults, so call it from `TweliApp.init()`.
     static func applyLaunchOverridesIfNeeded() {
         let env = ProcessInfo.processInfo.environment
-        guard env["TWELI_DEMO"] == "1" else { return }
+        guard env["TWELI_SKIP_ONBOARDING"] == "1" else { return }
         let d = UserDefaults.standard
-        d.set(true, forKey: demoKey)                        // seed MockData
-        d.set(true, forKey: "tweli.aboutYouDone")           // skip "About you"
-        d.set(true, forKey: "tweli.roomSetupComplete")      // pre-connected space
+        d.set(true, forKey: "tweli.aboutYouDone")
+        d.set(true, forKey: "tweli.roomSetupComplete")
         if d.string(forKey: "tweli.auth.appleUserId") == nil {
             d.set("dev-\(UUID().uuidString)", forKey: "tweli.auth.appleUserId")
         }
-        // Fresh → clear the baseline so the interstitial raises over Home;
-        // otherwise mark the mock mood already seen so Home shows the calm
-        // resting card with no interstitial.
-        if env["TWELI_FRESH_MOOD"] == "1" {
-            d.set(Date(timeIntervalSince1970: 0), forKey: "tweli.mood.lastSeenPartner")
-        } else {
-            d.set(Date(), forKey: "tweli.mood.lastSeenPartner")
+        // An empty space so the tab bar is reachable. This is app STATE, not
+        // content: no partner, no moods, no reminders, no letters, no dates —
+        // which is exactly the comp's E5 "half a thread" state.
+        if d.data(forKey: "tweli.coupleSpace") == nil {
+            let space = CoupleSpace(title: "Our space",
+                                    createdBy: UUID(),
+                                    partnerIds: [])
+            if let data = try? JSONEncoder().encode(space) {
+                d.set(data, forKey: "tweli.coupleSpace")
+            }
         }
     }
 #endif

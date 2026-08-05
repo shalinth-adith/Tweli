@@ -69,7 +69,7 @@ struct MoodInterstitialView: View {
         .padding(.top, 22)
         .padding(.bottom, 20)
         .frame(maxWidth: 340)
-        .background(Color(UIColor.secondarySystemGroupedBackground))   // white / #1C1C1E
+        .background(Color.twElevated)   // white / #1C1C1E
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(alignment: .topLeading) { moodsStamp }
         .overlay(alignment: .topTrailing) { dismissStamp }
@@ -97,8 +97,7 @@ struct MoodInterstitialView: View {
     private var content: some View {
         VStack(spacing: 0) {
             Circle()
-                .fill(LinearGradient(colors: [Color(red: 0.482, green: 0.475, blue: 1.0), .twAccent2],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(TweliGradient.partnerAvatar)
                 .frame(width: 76, height: 76)
                 .overlay(Text(partnerInitials).font(.system(size: 30, weight: .semibold)).foregroundStyle(.white))
                 .shadow(color: Color.twAccent2.opacity(0.34), radius: 13, x: 0, y: 10)
@@ -107,19 +106,19 @@ struct MoodInterstitialView: View {
                 .font(.system(size: 11, weight: .bold))
                 .textCase(.uppercase)
                 .kerning(0.5)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color.twInkTertiary)
                 .padding(.top, 16)
 
             Text(mood.displayLabel)
                 .font(.system(size: 34, weight: .heavy))
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.twInk)
                 .multilineTextAlignment(.center)
                 .padding(.top, 3)
 
             if let note = mood.note, !note.isEmpty {
                 Text("“\(note)”")
                     .font(.system(size: 15))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.twInkSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
@@ -141,7 +140,7 @@ struct MoodInterstitialView: View {
                     .environment(\.layoutDirection, .rightToLeft)   // icon trails the text
             }
             .font(.system(size: 12.5, weight: .bold))
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(Color.twInkTertiary)
 
             HStack(spacing: 6) {
                 Image(systemName: "lock.fill").font(.system(size: 10, weight: .semibold))
@@ -153,7 +152,7 @@ struct MoodInterstitialView: View {
         .padding(.top, 15)
         .frame(maxWidth: .infinity)
         .overlay(alignment: .top) {
-            Rectangle().fill(Color(UIColor.separator).opacity(0.5)).frame(height: 1)
+            Rectangle().fill(Color.twSeparator.opacity(0.5)).frame(height: 1)
         }
         .padding(.top, 4)
     }
@@ -198,9 +197,9 @@ struct MoodInterstitialView: View {
         Button { onDismiss() } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.twInkSecondary)
                 .frame(width: 30, height: 30)
-                .background(Color(UIColor.tertiarySystemFill))
+                .background(Color.twInkTertiary.opacity(0.14))
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)

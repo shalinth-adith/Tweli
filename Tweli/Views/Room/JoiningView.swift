@@ -35,14 +35,14 @@ struct JoiningView: View {
                 threadHero
                 Text(partnerJoined ? "You're connected" : "Tying your thread…")
                     .font(.system(size: 26, weight: .heavy)).kerning(-0.6)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.twInk)
                     .padding(.top, 26)
                     .opacity(appear ? 1 : 0)
                 Text(partnerJoined
                      ? "\(couple.partner?.displayName ?? "Your partner") just joined \(spaceTitle)"
                      : "Setting up \(spaceTitle)")
                     .font(.system(size: 14.5))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.twInkSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.top, 8)
                     .opacity(appear ? 1 : 0)
@@ -177,13 +177,13 @@ struct JoiningView: View {
             if !partnerJoined {
                 Button("Enter Tweli now") { app.finishOwnerWaiting() }
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.twInkSecondary)
             }
             Text(partnerJoined
                  ? "Bringing you home…"
                  : "We'll bring you home the moment they arrive.")
                 .font(.system(size: 13))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color.twInkTertiary)
                 .multilineTextAlignment(.center)
         }
         .opacity(appear ? 1 : 0)

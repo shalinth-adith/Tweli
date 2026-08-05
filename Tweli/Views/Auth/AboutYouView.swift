@@ -41,9 +41,9 @@ struct AboutYouView: View {
                     VStack(spacing: 8) {
                         Text("A little about you")
                             .font(.system(size: 28, weight: .heavy)).kerning(-0.6)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(Color.twInk)
                         Text("So your person always sees the right\nname, day and time on their side.")
-                            .font(.system(size: 14.5)).foregroundStyle(.secondary)
+                            .font(.system(size: 14.5)).foregroundStyle(Color.twInkSecondary)
                             .multilineTextAlignment(.center)
                     }
                     .padding(.top, 22).padding(.bottom, 26)
@@ -66,7 +66,7 @@ struct AboutYouView: View {
                                     .foregroundStyle(birthday == nil ? .secondary : .primary)
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .bold)).foregroundStyle(.tertiary)
+                                    .font(.system(size: 14, weight: .bold)).foregroundStyle(Color.twInkTertiary)
                             }
                         }
                         .buttonStyle(.plain)
@@ -87,16 +87,16 @@ struct AboutYouView: View {
                             .buttonStyle(.plain)
                             Text(gmtLabel)
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.twInkSecondary)
                                 .padding(.horizontal, 10).padding(.vertical, 4)
                                 .background(Color.primary.opacity(0.08), in: Capsule())
                         }
                     }
 
                     HStack(spacing: 8) {
-                        Image(systemName: "lock.fill").font(.system(size: 12)).foregroundStyle(.tertiary)
+                        Image(systemName: "lock.fill").font(.system(size: 12)).foregroundStyle(Color.twInkTertiary)
                         Text("Only your partner ever sees this.")
-                            .font(.system(size: 12.5)).foregroundStyle(.tertiary)
+                            .font(.system(size: 12.5)).foregroundStyle(Color.twInkTertiary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 14).padding(.horizontal, 4)
@@ -115,7 +115,7 @@ struct AboutYouView: View {
             }
             .padding(.horizontal, 20).padding(.bottom, 20)
         }
-        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+        .background(Color.twBackground.ignoresSafeArea())
         .onAppear {
             // Prefill the name from Apple / the stored profile.
             if name.isEmpty {
@@ -140,7 +140,7 @@ struct AboutYouView: View {
         HStack {
             if isEditing {
                 Button("Cancel") { dismiss() }
-                    .font(.system(size: 15)).foregroundStyle(.secondary)
+                    .font(.system(size: 15)).foregroundStyle(Color.twInkSecondary)
                     .frame(width: 60, height: 34, alignment: .leading)
             } else {
                 Color.clear.frame(width: 60, height: 34)
@@ -152,7 +152,7 @@ struct AboutYouView: View {
             Spacer()
             if !isEditing {
                 Button("Skip") { save(); app.finishAboutYou() }
-                    .font(.system(size: 15)).foregroundStyle(.secondary)
+                    .font(.system(size: 15)).foregroundStyle(Color.twInkSecondary)
                     .frame(width: 60, height: 34, alignment: .trailing)
             } else {
                 Color.clear.frame(width: 60, height: 34)
@@ -180,7 +180,7 @@ struct AboutYouView: View {
                 Circle().fill(Brand.pink)
                     .frame(width: 32, height: 32)
                     .overlay(Image(systemName: "camera.fill").font(.system(size: 13)).foregroundStyle(.white))
-                    .overlay(Circle().strokeBorder(Color(UIColor.systemGroupedBackground), lineWidth: 3))
+                    .overlay(Circle().strokeBorder(Color.twBackground, lineWidth: 3))
             }
         }
         .buttonStyle(.plain)
@@ -226,11 +226,11 @@ struct AboutYouView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
                 .font(.system(size: 12, weight: .semibold)).kerning(0.5)
-                .textCase(.uppercase).foregroundStyle(.secondary)
+                .textCase(.uppercase).foregroundStyle(Color.twInkSecondary)
                 .padding(.horizontal, 4)
             content()
                 .padding(16)
-                .background(Color(UIColor.secondarySystemGroupedBackground),
+                .background(Color.twElevated,
                             in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)

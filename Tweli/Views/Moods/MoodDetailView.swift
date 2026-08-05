@@ -84,7 +84,7 @@ struct MoodDetailView: View {
                                 .fill(mood.tint)
                                 .frame(height: 64)
                             Text(weekdayLabel(for: i))
-                                .font(.caption2).foregroundStyle(.tertiary)
+                                .font(.caption2).foregroundStyle(Color.twInkTertiary)
                         }
                         .frame(maxWidth: .infinity)
                     }
@@ -102,9 +102,9 @@ struct MoodDetailView: View {
                     HStack(spacing: 12) {
                         Circle().fill(mood.tint).frame(width: 10, height: 10)
                         Text(i == week.count - 1 ? "Today" : weekdayLabel(for: i))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.twInkSecondary)
                         Spacer()
-                        Text(mood.label).fontWeight(.semibold).foregroundStyle(.primary)
+                        Text(mood.label).fontWeight(.semibold).foregroundStyle(Color.twInk)
                     }
                     .font(.subheadline)
                     .padding(.horizontal, 16).padding(.vertical, 12)

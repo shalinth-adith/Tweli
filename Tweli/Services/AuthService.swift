@@ -126,7 +126,9 @@ final class AuthService: ObservableObject {
     /// Excluded from release builds. FirebaseService's own `devSignIn()` (invoked by
     /// AppViewModel on this state change) keeps the service fully offline.
     func devSignIn() {
-        store(userId: "dev-\(UUID().uuidString)", name: displayName.isEmpty ? "Shalinth" : displayName)
+        // No stand-in name: a dev sign-in lands on "About you" with an empty
+        // field, exactly like a real one would.
+        store(userId: "dev-\(UUID().uuidString)", name: displayName)
     }
 #endif
 

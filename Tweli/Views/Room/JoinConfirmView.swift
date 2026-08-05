@@ -38,7 +38,7 @@ struct JoinConfirmView: View {
             HStack(spacing: 0) {
                 AvatarBubble(initial: invite.inviterName, isPartner: true, size: 58)
                 Image(systemName: "ellipsis")
-                    .font(.title3).foregroundStyle(.tertiary)
+                    .font(.title3).foregroundStyle(Color.twInkTertiary)
                     .padding(.horizontal, 10)
                 ProfileAvatar(profile: app.currentUser, isPartner: false, size: 58)
             }
@@ -46,16 +46,16 @@ struct JoinConfirmView: View {
             VStack(spacing: 8) {
                 Text("Join “\(invite.spaceTitle)”?")
                     .font(.system(size: 24, weight: .heavy))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.twInk)
                     .multilineTextAlignment(.center)
                 Text("\(invite.inviterName) invited you to your shared space 💞")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(Color.twInkSecondary)
                     .multilineTextAlignment(.center)
             }
             .padding(.horizontal, 12)
 
             Text("You'll share reminders, moods, countdowns and letters — just the two of you.")
-                .font(.footnote).foregroundStyle(.tertiary)
+                .font(.footnote).foregroundStyle(Color.twInkTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
 
@@ -75,7 +75,7 @@ struct JoinConfirmView: View {
 
                 Button("Not now") { app.cancelPendingJoin() }
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.twInkSecondary)
             }
         }
         .padding(.horizontal, 24).padding(.vertical, 20)
@@ -129,10 +129,10 @@ private struct ConnectingView: View {
                 }
                 Text("Tying your thread…")
                     .font(.system(size: 26, weight: .heavy)).kerning(-0.6)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.twInk)
                     .padding(.top, 26)
                 Text("Joining \(spaceTitle)")
-                    .font(.system(size: 14.5)).foregroundStyle(.secondary)
+                    .font(.system(size: 14.5)).foregroundStyle(Color.twInkSecondary)
                     .padding(.top, 8)
                 ProgressView()
                     .padding(.top, 26)

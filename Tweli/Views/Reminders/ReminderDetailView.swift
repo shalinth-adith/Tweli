@@ -34,7 +34,7 @@ struct ReminderDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(current.title)
                 .font(.title.weight(.bold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.twInk)
             HStack(spacing: 6) {
                 ChipView.assignee(current.assignedTo)
                 ChipView(text: current.status.label, tint: current.status.tint)
@@ -49,7 +49,7 @@ struct ReminderDetailView: View {
         CardView(background: .twAccentSoft) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "heart.fill").foregroundStyle(Color.twAccent)
-                Text(current.note).font(.callout).foregroundStyle(.primary)
+                Text(current.note).font(.callout).foregroundStyle(Color.twInk)
             }
         }
     }
@@ -69,9 +69,9 @@ struct ReminderDetailView: View {
     private func detailRow(_ icon: String, _ label: String, _ value: String, tint: Color = .twAccent2) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon).foregroundStyle(tint).frame(width: 24)
-            Text(label).foregroundStyle(.secondary)
+            Text(label).foregroundStyle(Color.twInkSecondary)
             Spacer()
-            Text(value).fontWeight(.semibold).foregroundStyle(.primary)
+            Text(value).fontWeight(.semibold).foregroundStyle(Color.twInk)
         }
         .font(.subheadline)
         .padding(.horizontal, 16).padding(.vertical, 14)

@@ -42,7 +42,7 @@ struct PartnerSpaceView: View {
                 .font(.title2.weight(.bold))
             if let since = couple.coupleSpace?.createdAt {
                 Text("Together since \(since.formatted(date: .abbreviated, time: .omitted))")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Color.twInkSecondary)
             }
         }
         .frame(maxWidth: .infinity)
@@ -76,7 +76,7 @@ struct PartnerSpaceView: View {
     private func statTile(_ value: String, _ label: String, _ tint: Color) -> some View {
         VStack(spacing: 4) {
             Text(value).font(.title2.weight(.heavy)).foregroundStyle(tint)
-            Text(label).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Text(label).font(.caption2).foregroundStyle(Color.twInkSecondary).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
@@ -92,11 +92,11 @@ struct PartnerSpaceView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(cd.title).tweliEyebrow()
-                        Text("\(cd.daysRemaining) days to go").font(.headline).foregroundStyle(.primary)
+                        Text("\(cd.daysRemaining) days to go").font(.headline).foregroundStyle(Color.twInk)
                     }
                     Spacer()
                     Image(systemName: cd.category.sfSymbol).font(.title2).foregroundStyle(Color.twAccent)
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.twInkTertiary)
                 }
             }
         }
@@ -107,9 +107,9 @@ struct PartnerSpaceView: View {
         CardView {
             HStack(spacing: 10) {
                 Circle().fill(Color.twSuccess).frame(width: 10, height: 10)
-                Text("Connected").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                Text("Connected").font(.subheadline.weight(.semibold)).foregroundStyle(Color.twInk)
                 Spacer()
-                Text("iCloud").font(.caption).foregroundStyle(.secondary)
+                Text("iCloud").font(.caption).foregroundStyle(Color.twInkSecondary)
             }
         }
     }
@@ -126,12 +126,12 @@ struct PartnerSpaceView: View {
             .padding(.top, 24)
 
             Text(couple.awaitingPartner ? "Waiting for your partner" : "No partner yet")
-                .font(.title3.weight(.bold)).foregroundStyle(.primary)
+                .font(.title3.weight(.bold)).foregroundStyle(Color.twInk)
 
             Text(couple.awaitingPartner
                  ? "They'll appear here the moment they open your invite."
                  : "Invite your partner from Settings to start sharing your space.")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(.subheadline).foregroundStyle(Color.twInkSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 24)

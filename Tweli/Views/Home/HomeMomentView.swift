@@ -25,6 +25,13 @@ struct HomeMomentView: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            // "It's 11:04 PM in Abu Dhabi — Anaya is probably asleep." Renders
+            // nothing until the partner has shared a location with a time zone.
+            if let partner = app.partner {
+                PartnerLocalTimeBanner(partnerName: partner.displayName,
+                                       cityLabel: location.partnerLocation?.cityLabel,
+                                       timeZoneId: location.partnerLocation?.timeZoneId)
+            }
             moodMoment
             ClosenessStripView(distanceLabel: location.distanceApartLabel,
                                hasMyLocation: location.myLocation != nil,
@@ -95,82 +102,103 @@ struct HomeMomentView: View {
 
     // MARK: - Today's reminders (checkable)
 
+    /// Comp L3 "Sometime today" / N3 "Before you sleep": a quiet card whose
+    /// eyebrow names the part of the day, one row per remaining reminder with a
+    /// 23pt rounded-square checkbox, and the row's own action in accent ink.
     private var remindersCard: some View {
-        CardView(padding: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("Today").tweliEyebrow()
-                    Spacer()
-                    if !reminders.today.isEmpty {
-                        Text(todayCountLabel)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.twAccent)
-                    }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(todayEyebrow).tweliEyebrow()
+                Spacer()
+                if !reminders.today.isEmpty {
+                    Text(todayCountLabel)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.twAccentInk)
                 }
-                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 4)
-
-                if reminders.today.isEmpty {
-                    Text("No reminders today")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                        .padding(.horizontal, 16).padding(.vertical, 8)
-                } else {
-                    ForEach(reminders.today.prefix(3)) { r in
-                        HStack(spacing: 12) {
-                            Button { withAnimation { reminders.toggleDone(r) } } label: {
-                                // Curved-square checkbox (design: rounded square,
-                                // warn-tinted while the reminder is overdue).
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .strokeBorder(r.isCompleted ? .clear
-                                                      : (r.isMissed ? Color.twWarn : Color.twInkTertiary),
-                                                      lineWidth: 1.8)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                                .fill(r.isCompleted ? Color.twSuccess : .clear)
-                                        )
-                                        .frame(width: 25, height: 25)
-                                    if r.isCompleted {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 12, weight: .bold))
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            Text(r.title)
-                                .font(.subheadline)
-                                .strikethrough(r.isCompleted)
-                                .foregroundStyle(r.isCompleted ? .tertiary : .primary)
-                            Spacer()
-                            Text(r.timeLabel).font(.caption).foregroundStyle(.tertiary)
-                        }
-                        .padding(.horizontal, 16).padding(.vertical, 9)
-                        if r.id != reminders.today.prefix(3).last?.id {
-                            Divider().padding(.leading, 44)
-                        }
-                    }
-                }
-
-                // "Add a reminder" — jumps to the Reminders tab to compose one.
-                Button { app.requestedTab = 1 } label: {
-                    HStack(spacing: 9) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 15, weight: .bold))
-                        Text("Add a reminder")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundStyle(Color.twAccent)
-                    .padding(.horizontal, 16).padding(.top, 13).padding(.bottom, 3)
-                }
-                .buttonStyle(.plain)
             }
-            .padding(.bottom, 8)
+
+            if reminders.today.isEmpty {
+                Text("Nothing planned today.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.twInkSecondary)
+                    .padding(.top, 12)
+            } else {
+                ForEach(Array(reminders.today.prefix(3).enumerated()), id: \.element.id) { index, r in
+                    if index > 0 {
+                        Rectangle().fill(Color.twSeparator).frame(height: 1).padding(.leading, 35)
+                    }
+                    reminderRow(r)
+                }
+            }
+
+            // "Add a reminder" — jumps to the Reminders tab to compose one.
+            Button { app.requestedTab = 1 } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Add a reminder")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(Color.twAccentInk)
+                .padding(.top, 14)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tweliCard()
+    }
+
+    private func reminderRow(_ r: ReminderItem) -> some View {
+        HStack(spacing: 12) {
+            Button { withAnimation { reminders.toggleDone(r) } } label: {
+                // Comp: 23pt square, radius 7, 2pt stroke; warn-tinted while overdue.
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(r.isCompleted ? .clear
+                                  : (r.isMissed ? Color.twWarn : Color.twControlStroke),
+                                  lineWidth: 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(r.isCompleted ? Color.twSuccess : .clear)
+                    )
+                    .frame(width: 23, height: 23)
+                    .overlay {
+                        if r.isCompleted {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(r.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .strikethrough(r.isCompleted)
+                    .foregroundStyle(r.isCompleted ? Color.twInkTertiary : Color.twInk)
+                Text(r.timeLabel)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.twInkTertiary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10)
+    }
+
+    /// The comp changes this label with the hour: "Sometime today" by day,
+    /// "Before you sleep" at night, "This evening" in between.
+    private var todayEyebrow: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 0..<5, 21...: return "Before you sleep"
+        case 17..<21:      return "This evening"
+        default:           return "Sometime today"
         }
     }
 
     private var todayCountLabel: String {
         let items = reminders.today
         let done = items.filter { $0.isCompleted }.count
-        return "\(done)/\(items.count)"
+        return "\(done) of \(items.count) done"
     }
 }

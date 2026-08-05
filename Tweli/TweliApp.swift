@@ -15,8 +15,9 @@ struct TweliApp: App {
 
     init() {
 #if DEBUG
-        // Seed the connected demo state when launched with TWELI_DEMO=1, before
-        // the AppViewModel's services read UserDefaults. No-op otherwise.
+        // Skip onboarding for headless screenshots when launched with
+        // TWELI_SKIP_ONBOARDING=1, before the AppViewModel's services read
+        // UserDefaults. Seeds no content. No-op otherwise.
         AppEnvironment.applyLaunchOverridesIfNeeded()
 #endif
     }
@@ -44,6 +45,7 @@ struct TweliApp: App {
                 .environmentObject(app.locationService)
                 .environmentObject(app.missingYouService)
                 .environmentObject(app.notifications)
+                .environmentObject(app.theme)
                 .tint(.twAccent)
         }
     }

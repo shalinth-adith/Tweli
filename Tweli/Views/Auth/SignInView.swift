@@ -47,7 +47,7 @@ struct SignInView: View {
             Text("TWELI")
                 .font(.system(size: 15, weight: .semibold))
                 .kerning(7)
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.twInk)
                 .padding(.top, 22)
                 .opacity(appear ? 1 : 0)
 
@@ -55,13 +55,13 @@ struct SignInView: View {
                 .font(.system(size: 32, weight: .heavy))
                 .kerning(-0.8)
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.twInk)
                 .padding(.top, 16)
                 .opacity(appear ? 1 : 0)
 
             Text("Reminders, dates, moods and letters — shared with the only person who matters.")
                 .font(.system(size: 15))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.twInkSecondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
                 .frame(maxWidth: 290)
@@ -97,7 +97,7 @@ struct SignInView: View {
                 HStack(spacing: 8) {
                     ProgressView()
                     Text("Finishing sign-in…")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .font(.footnote).foregroundStyle(Color.twInkSecondary)
                 }
             } else if let error = auth.authError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -109,22 +109,18 @@ struct SignInView: View {
 
             Text("By continuing you agree to our Terms & Privacy.")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color.twInkTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 2)
 
 #if DEBUG
-            // Developer-only. Absent from every distribution build. Enabling demo
-            // data takes effect on the next launch (services seed at init).
-            HStack(spacing: 16) {
-                Button("Dev sign-in") { auth.devSignIn() }
-                Button("Dev sign-in + demo data") {
-                    AppEnvironment.enableDemoData(); auth.devSignIn()
-                }
-            }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .padding(.top, 4)
+            // Developer-only, and absent from every distribution build. Signs in
+            // against the local offline store — it seeds no content, so the app
+            // still opens on genuinely empty state.
+            Button("Dev sign-in") { auth.devSignIn() }
+                .font(.footnote)
+                .foregroundStyle(Color.twInkSecondary)
+                .padding(.top, 4)
 #endif
         }
         .opacity(appear ? 1 : 0)

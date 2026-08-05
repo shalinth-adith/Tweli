@@ -46,15 +46,33 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
 
     // MARK: - Scheduling
 
-    func schedule(for reminder: ReminderItem) {
+    /// - Parameters:
+    ///   - mine: whether THIS device's user created the reminder. The subtitle is
+    ///     written from the reader's point of view, so the same reminder says
+    ///     something different on each phone.
+    ///   - partnerName: used when the reader did NOT create it ("Anaya asked
+    ///     you to remember this"). Falls back to "Your partner" when unknown.
+    func schedule(for reminder: ReminderItem, mine: Bool, partnerName: String = "") {
         guard !reminder.isCompleted else { return }
+
+        let who = partnerName.trimmingCharacters(in: .whitespaces).isEmpty
+            ? "Your partner" : partnerName
 
         let content = UNMutableNotificationContent()
         content.title = reminder.title
         switch reminder.assignedTo {
-        case .both: content.subtitle = "For both of you 💞"
-        case .partner: content.subtitle = "A nudge for your partner 💗"
-        case .me: break
+        case .both:
+            // Fires on both phones; only the person who didn't set it needs
+            // telling who did.
+            content.subtitle = mine ? "For both of you 💞" : "\(who) set this for both of you 💞"
+        case .partner:
+            // Only ever delivered to the partner — so the reader IS the person
+            // it was set for. Saying "a nudge for your partner" here told them
+            // it was meant for someone else.
+            content.subtitle = "\(who) asked you to remember this 💗"
+        case .me:
+            // Only ever delivered to the person who set it; no attribution needed.
+            break
         }
         content.body = reminder.note.isEmpty
             ? "A small care reminder ❤️"
@@ -117,9 +135,9 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
         center.removeAllPendingNotificationRequests()
     }
 
-    func reschedule(for reminder: ReminderItem) {
+    func reschedule(for reminder: ReminderItem, mine: Bool, partnerName: String = "") {
         cancel(id: reminder.id)
-        schedule(for: reminder)
+        schedule(for: reminder, mine: mine, partnerName: partnerName)
     }
 
     // MARK: - Countdowns (fire on the day the countdown reaches zero)

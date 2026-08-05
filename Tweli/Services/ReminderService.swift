@@ -2,9 +2,9 @@
 //  ReminderService.swift
 //  Tweli
 //
-//  Owns reminder data + business logic. Mock-first (seeded from MockData);
-//  every mutation also (a) schedules/cancels the local notification, (b) calls
-//  the CloudKit placeholder, and (c) fires `onDataChanged` so the widget refreshes.
+//  Owns reminder data + business logic. Starts empty and fills only from real
+//  synced data; every mutation also (a) schedules/cancels the local notification,
+//  (b) writes to Firestore, and (c) fires `onDataChanged` so the widget refreshes.
 //
 
 import Foundation
@@ -17,6 +17,9 @@ final class ReminderService: ObservableObject {
 
     /// Set by AppViewModel — used to stamp `completedBy` on the current device.
     var currentUserId = UUID()
+    /// The partner's display name, for reminder copy the partner will read
+    /// ("Anaya asked you to remember this"). Set by AppViewModel.wireIdentities.
+    var partnerName: String = ""
     /// AppViewModel hooks this to refresh the widget snapshot after any change.
     var onDataChanged: (() -> Void)?
 
@@ -27,9 +30,6 @@ final class ReminderService: ObservableObject {
         self.notifications = notifications
         self.cloud = cloud
         self.reminders = []
-#if DEBUG
-        if AppEnvironment.useDemoData { self.reminders = MockData.reminders }
-#endif
     }
 
     /// Schedule local notifications for all current reminders. Called once at
@@ -45,23 +45,40 @@ final class ReminderService: ObservableObject {
     /// so re-running is idempotent and assignment/timezone changes self-correct.
     private func applySchedule(_ r: ReminderItem) {
         if !r.isCompleted && shouldRing(r) {
-            notifications.reschedule(for: r)   // cancel + schedule
+            // `mine` decides whose point of view the alert is written from.
+            notifications.reschedule(for: r,
+                                     mine: r.createdBy == currentUserId,
+                                     partnerName: partnerName)   // cancel + schedule
         } else {
             notifications.cancel(id: r.id)
         }
     }
 
-    /// Whether THIS device should ring for a reminder, based on who it's for:
-    /// `.me` rings only on the creator's device, `.partner` only on the other's,
-    /// `.both` on both. Combined with the wall-clock scheduling in
-    /// `ReminderNotificationService`, a partner-assigned "9:30 AM" fires at 9:30 AM
-    /// in the partner's own timezone — not the setter's.
-    private func shouldRing(_ r: ReminderItem) -> Bool {
+    /// Whether THIS device should ring for a reminder, based on who it's for.
+    ///
+    /// `assignedTo` is written from the CREATOR's point of view, so the rule is:
+    ///
+    /// | assignedTo | creator's phone | partner's phone |
+    /// |------------|-----------------|-----------------|
+    /// | `.me`      | rings           | silent          |
+    /// | `.partner` | silent          | rings           |
+    /// | `.both`    | rings           | rings           |
+    ///
+    /// Combined with the wall-clock scheduling in `ReminderNotificationService`,
+    /// a partner-assigned "9:30 AM" fires at 9:30 AM in the partner's own
+    /// timezone — not the setter's.
+    ///
+    /// Static and pure so the matrix above can be tested directly.
+    static func shouldRing(_ r: ReminderItem, currentUserId: UUID) -> Bool {
         switch r.assignedTo {
         case .both:    return true
         case .me:      return r.createdBy == currentUserId
         case .partner: return r.createdBy != currentUserId
         }
+    }
+
+    private func shouldRing(_ r: ReminderItem) -> Bool {
+        Self.shouldRing(r, currentUserId: currentUserId)
     }
 
     // MARK: - CRUD

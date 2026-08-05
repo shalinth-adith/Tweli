@@ -19,9 +19,6 @@ final class VirtualDateService: ObservableObject {
         self.cloud = cloud
         self.notifications = notifications
         self.dates = []
-#if DEBUG
-        if AppEnvironment.useDemoData { self.dates = MockData.virtualDates }
-#endif
     }
 
     /// The next planned date — Home dashboard + widget.
@@ -45,6 +42,15 @@ final class VirtualDateService: ObservableObject {
         guard let i = dates.firstIndex(where: { $0.id == date.id }) else { return }
         dates[i] = date
         Task { await cloud.saveVirtualDate(date) }
+        onDataChanged?()
+    }
+
+    /// Comp L5 "Remind us" — flips the 30-min-before alert for this date.
+    func toggleReminder(_ date: VirtualDateItem) {
+        guard let i = dates.firstIndex(where: { $0.id == date.id }) else { return }
+        dates[i].reminderEnabled.toggle()
+        let updated = dates[i]
+        Task { await cloud.saveVirtualDate(updated) }
         onDataChanged?()
     }
 

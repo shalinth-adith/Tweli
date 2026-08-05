@@ -2,7 +2,7 @@
 //  RoomSetupView.swift
 //  Tweli
 //
-//  Design 12a — post-login "Join or create" landing.
+//  Comp A4 — "Your space, for two". One of you starts, the other joins.
 //
 
 import SwiftUI
@@ -25,27 +25,39 @@ struct RoomSetupView: View {
     var body: some View {
         NavigationStack(path: $path) {
             VStack(alignment: .leading, spacing: 0) {
-                ThreadMotif().frame(width: 70, height: 30).padding(.bottom, 20)
+                ThreadMotif().frame(width: 70, height: 30).padding(.bottom, 22)
 
-                Text("Welcome,\n\(firstName)")
+                Text("Step 2 of 3")
+                    .font(.system(size: 12, weight: .bold))
+                    .textCase(.uppercase)
+                    .tracking(1.2)
+                    .foregroundStyle(Color.twAccentInk)
+
+                Text(firstName == "there" ? "Your space,\nfor two" : "\(firstName), your space\nfor two")
                     .font(.system(size: 30, weight: .heavy))
-                    .foregroundStyle(.primary)
-                Text("Start a shared space, or join the one your partner already made.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .tracking(-0.7)
+                    .foregroundStyle(Color.twInk)
                     .padding(.top, 8)
 
-                Spacer()
+                Text("A space holds everything you share. Only the two of you can ever see inside.")
+                    .font(.system(size: 14.5))
+                    .lineSpacing(3)
+                    .foregroundStyle(Color.twInkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+
+                Spacer(minLength: 24)
 
                 VStack(spacing: 14) {
                     NavigationLink(value: Route.create) {
-                        optionCard(icon: "plus", title: "Create a space",
-                                   subtitle: "Start fresh and invite your partner",
+                        optionCard(icon: "plus", title: "Start our space",
+                                   subtitle: "Create it and send your partner a private invite code.",
                                    filled: true)
                     }.buttonStyle(.plain)
 
                     NavigationLink(value: Route.join) {
-                        optionCard(icon: "arrow.right.to.line", title: "Join a space",
-                                   subtitle: "Have an invite link? Paste it here",
+                        optionCard(icon: "arrow.right.to.line", title: "Join with a code",
+                                   subtitle: "Your partner already started — enter the code they sent you.",
                                    filled: false)
                     }.buttonStyle(.plain)
                 }
@@ -54,7 +66,7 @@ struct RoomSetupView: View {
             .padding(.top, 40)
             .padding(.bottom, 40)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+            .background(Color.twBackground.ignoresSafeArea())
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .create: CreateSpaceView(onSwitchToJoin: { path = [.join] })
@@ -82,19 +94,27 @@ struct RoomSetupView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(filled ? .white : .primary)
+                    .foregroundStyle(filled ? Color.white : Color.twInk)
                 Text(subtitle).font(.system(size: 13))
-                    .foregroundStyle(filled ? .white.opacity(0.85) : .secondary)
+                    .lineSpacing(1)
+                    .multilineTextAlignment(.leading)
+                    .foregroundStyle(filled ? Color.white.opacity(0.85) : Color.twInkSecondary)
             }
             Spacer()
             Image(systemName: "chevron.right").font(.subheadline.weight(.semibold))
                 .foregroundStyle(filled ? .white.opacity(0.9) : Color.twInkTertiary)
         }
         .padding(18)
-        .background(filled ? Color.twAccent : Color(UIColor.secondarySystemGroupedBackground))
+        .background(filled ? Color.twAccent : Color.twElevated)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: filled ? Color.twAccent.opacity(0.28) : .black.opacity(0.05),
-                radius: filled ? 16 : 4, x: 0, y: filled ? 8 : 1)
+        .overlay {
+            if !filled {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.twHairline, lineWidth: 1)
+            }
+        }
+        // Comp: only the primary card glows; the secondary sits flat.
+        .shadow(color: filled ? Color.twAccent.opacity(0.35) : .clear, radius: filled ? 15 : 0)
     }
 }
 

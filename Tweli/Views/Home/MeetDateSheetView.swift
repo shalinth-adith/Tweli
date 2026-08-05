@@ -29,7 +29,7 @@ struct MeetDateSheetView: View {
                 .font(.system(size: 22, weight: .heavy))
             Text("Pick the day and we'll count it down for you.")
                 .font(.system(size: 13.5))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.twInkSecondary)
                 .padding(.top, 4)
 
             monthHeader.padding(.top, 18).padding(.bottom, 12)
@@ -58,7 +58,7 @@ struct MeetDateSheetView: View {
 
     private var grabber: some View {
         Capsule()
-            .fill(Color(UIColor.tertiaryLabel))
+            .fill(Color.twInkQuaternary)
             .frame(width: 38, height: 5)
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
@@ -81,7 +81,7 @@ struct MeetDateSheetView: View {
             .buttonStyle(.plain)
             .padding(.leading, 14)
         }
-        .foregroundStyle(.primary)
+        .foregroundStyle(Color.twInk)
     }
 
     private var weekdayHeader: some View {
@@ -89,7 +89,7 @@ struct MeetDateSheetView: View {
             ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { d in
                 Text(d)
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Color.twInkTertiary)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -147,7 +147,7 @@ struct MeetDateSheetView: View {
             if let selected {
                 Text(selected.formatted(.dateTime.month(.abbreviated).day()))
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.twInkSecondary)
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 12)

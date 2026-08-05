@@ -29,7 +29,7 @@ struct SectionHeader<Accessory: View>: View {
         HStack {
             Text(title)
                 .font(.title3.weight(.bold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.twInk)
             Spacer()
             accessory()
         }

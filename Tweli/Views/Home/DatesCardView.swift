@@ -43,7 +43,7 @@ struct DatesCardView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(next?.title ?? "Plan your first date")
                             .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(Color.twInk)
                             .lineLimit(1)
                         Text(subtitle)
                             .font(.system(size: 12.5, weight: .semibold))

@@ -24,10 +24,10 @@ struct EmptyStateView: View {
             VStack(spacing: 6) {
                 Text(title)
                     .font(.title3.weight(.bold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.twInk)
                 Text(subtitle)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.twInkSecondary)
                     .multilineTextAlignment(.center)
             }
             if let actionTitle, let action {

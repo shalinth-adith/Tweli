@@ -64,6 +64,16 @@ struct MainTabView: View {
             // (e.g. cold launch straight from the widget).
             if let tab = app.requestedTab { selection = tab; app.requestedTab = nil }
             app.revealFreshMoodIfAny()
+#if DEBUG
+            // Verification hook (DEBUG only): TWELI_TAB=<0-3> opens straight to a
+            // tab so a headless simulator can screenshot it. Simulators have no
+            // touch injection, and a tweli:// deep link raises a system
+            // confirmation dialog that cannot then be dismissed.
+            if let raw = ProcessInfo.processInfo.environment["TWELI_TAB"],
+               let tab = Int(raw), (0...3).contains(tab) {
+                selection = tab
+            }
+#endif
         }
         .task {
             // Ask for notification permission once the user is in the app, then

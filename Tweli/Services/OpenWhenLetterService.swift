@@ -17,9 +17,6 @@ final class OpenWhenLetterService: ObservableObject {
     init(cloud: FirebaseService) {
         self.cloud = cloud
         self.letters = []
-#if DEBUG
-        if AppEnvironment.useDemoData { self.letters = MockData.letters }
-#endif
     }
 
     var unopened: [OpenWhenLetter] { letters.filter { !$0.isOpened } }

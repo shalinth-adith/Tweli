@@ -8,7 +8,7 @@
 //  membership (max two Firebase UIDs) plus six item subcollections. Each item is
 //  stored as a "thin payload" document — the Codable model JSON-encoded into a
 //  single `payload` string field — which keeps the mapping to our models tiny and
-//  identical to the CloudKit port it replaces. A 6-char pair code
+//  identical to the CloudKit port it replaces. An 8-char pair code
 //  (`pairCodes/{code}`, code == doc id) is the whole invite: it carries the
 //  spaceId, so redeeming is a direct getDocument with no queryable index.
 //
@@ -29,8 +29,9 @@
 //
 //  DEBUG bypass: `devSignIn()` sets a synthetic `dev-` uid and makes NO network
 //  call; every Firestore read/write/listener short-circuits on a `dev-` (or nil)
-//  uid, so debug builds run entirely on MockData + local stores. Compile-time
-//  excluded from release builds.
+//  uid, so debug builds run entirely on the local stores (which start empty).
+//  Compile-time
+//  Excluded from release builds.
 //
 
 import Foundation
@@ -62,6 +63,11 @@ final class FirebaseService: ObservableObject {
     private let roleKey = "tweli.fb.role"
     private let spaceIdKey = "tweli.fb.spaceId"
     private let pairCodeKey = "tweli.fb.pairCode"
+    private let pairCodeExpiryKey = "tweli.fb.pairCodeExpiry"
+
+    /// When the current pair code stops working. Drives the invite screen's
+    /// "Expires in N hours" line and its expired state (comp A5 / E3).
+    @Published private(set) var pairCodeExpiresAt: Date?
     /// Same key AuthService persists the display name under — the owner/participant
     /// name written into `memberNames` and pair codes is read from here so
     /// `createSpace(title:)` / `publishPairCode` need no extra name argument.
@@ -120,7 +126,7 @@ final class FirebaseService: ObservableObject {
 
     /// True when there is no real signed-in Firebase user — either nobody is signed
     /// in, or this is a DEBUG bypass (`dev-` uid). Every network operation early
-    /// returns on this so debug builds stay fully offline on MockData.
+    /// returns on this so debug builds stay fully offline on the local stores.
     private var isDevOrOffline: Bool {
         guard let uid = currentUid else { return true }
         return uid.hasPrefix("dev-")
@@ -178,8 +184,8 @@ final class FirebaseService: ObservableObject {
 
 #if DEBUG
     /// Dev bypass — synthetic uid, no network. FirebaseService treats a `dev-` uid
-    /// as offline, so all Firestore reads/writes/listeners short-circuit (mirrors
-    /// the old CloudKit DEBUG path that ran on MockData with role == .none).
+    /// as offline, so all Firestore reads/writes/listeners short-circuit. It seeds
+    /// no content — the app still opens on genuinely empty state.
     func devSignIn() {
         currentUid = "dev-\(UUID().uuidString)"
         accountAvailable = true
@@ -211,16 +217,56 @@ final class FirebaseService: ObservableObject {
         var id: String { spaceId }
     }
 
-    /// Unambiguous alphabet — no 0/O, 1/I/L. 6 chars ≈ 887M combinations.
-    static let codeAlphabet = Array("23456789ABCDEFGHJKMNPQRSTUVWXYZ")
+    // MARK: - Pair codes (comp A5/A6 — "TWLI-4821")
 
-    private static func makeCode() -> String {
-        String((0..<6).map { _ in codeAlphabet.randomElement()! })
+    /// Letters, minus the ones that read as digits (I, L, O).
+    static let codeLetters = Array("ABCDEFGHJKMNPQRSTUVWXYZ")
+    /// Digits. O is absent from the letters above, so 0 is unambiguous here.
+    static let codeDigits = Array("0123456789")
+    /// Everything a code can contain — used to strip separators on input.
+    static let codeAlphabet = codeLetters + codeDigits
+
+    /// The comp writes codes as `TWLI-4821`: four letters, a hyphen, four
+    /// digits. We keep that exact shape but make BOTH halves random — a fixed
+    /// "TWLI" prefix would leave only 10,000 possible codes. Four letters plus
+    /// four digits is 23⁴ × 10⁴ ≈ 2.8 billion, which is a real invite code that
+    /// still reads like the one in the design.
+    ///
+    /// One deviation: the comp's literal example "TWLI" contains I and L, which
+    /// are excluded above because they are unreadable next to 1. So that exact
+    /// string can never be minted, and the UI hint shows the shape
+    /// ("ABCD-1234") rather than an example the app could never issue.
+    static let codeLength = 8
+
+    /// Internal (not private) so the test suite can assert that every minted
+    /// code round-trips through normalize/format.
+    static func makeCode() -> String {
+        let letters = (0..<4).map { _ in codeLetters.randomElement()! }
+        let digits = (0..<4).map { _ in codeDigits.randomElement()! }
+        return String(letters + digits)
     }
 
-    /// Uppercases and strips separators so "7gk-4pb" and "7GK 4PB" both work.
+    /// Uppercases and strips separators so "twli 4821" and "TWLI-4821" both
+    /// resolve to the stored document id "TWLI4821".
     static func normalizePairCode(_ raw: String) -> String {
         raw.uppercased().filter { codeAlphabet.contains($0) }
+    }
+
+    /// Display form — "TWLI4821" → "TWLI-4821". Codes minted before this format
+    /// (6 characters, no split) are returned unchanged.
+    static func formatPairCode(_ raw: String) -> String {
+        let code = normalizePairCode(raw)
+        guard code.count == codeLength else { return code }
+        let i = code.index(code.startIndex, offsetBy: 4)
+        return "\(code[..<i])-\(code[i...])"
+    }
+
+    /// A code is enterable once it has a plausible length. Both the current
+    /// 8-character format and the legacy 6-character one are accepted, so an
+    /// invite sent before the change still works.
+    static func isPlausiblePairCode(_ raw: String) -> Bool {
+        let n = normalizePairCode(raw).count
+        return n == codeLength || n == 6
     }
 
     // MARK: - Space + pairing (invite flow)
@@ -249,7 +295,7 @@ final class FirebaseService: ObservableObject {
         return ref.documentID
     }
 
-    /// Owner: publish (or reuse an unexpired) 6-char pair code pointing at this
+    /// Owner: publish (or reuse an unexpired) pair code pointing at this
     /// space. The code IS the document id, so redemption is a direct getDocument —
     /// no query index, no dashboard setup.
     func publishPairCode(spaceTitle: String) async throws -> String {
@@ -265,17 +311,20 @@ final class FirebaseService: ObservableObject {
            doc["spaceId"] as? String == spaceId,
            let expires = (doc["expiresAt"] as? Timestamp)?.dateValue(), expires > Date() {
             log("reusing pair code \(cached)")
+            await MainActor.run { self.pairCodeExpiresAt = expires }
+            defaults.set(expires, forKey: pairCodeExpiryKey)
             return cached
         }
 
         let code = Self.makeCode()
+        let expires = Date().addingTimeInterval(48 * 3600)   // 48h, per comp A5
         do {
             try await db.collection("pairCodes").document(code).setData([
                 "spaceId": spaceId,
                 "spaceTitle": spaceTitle,
                 "createdBy": uid,
                 "createdByName": displayName,
-                "expiresAt": Timestamp(date: Date().addingTimeInterval(48 * 3600)),  // 48h
+                "expiresAt": Timestamp(date: expires),
                 "createdAt": FieldValue.serverTimestamp()
             ])
         } catch {
@@ -283,8 +332,19 @@ final class FirebaseService: ObservableObject {
             throw PairCodeError.network
         }
         defaults.set(code, forKey: pairCodeKey)
+        defaults.set(expires, forKey: pairCodeExpiryKey)
+        await MainActor.run { self.pairCodeExpiresAt = expires }
         log("published pair code \(code) → space \(spaceId)")
         return code
+    }
+
+    /// Owner: discard the cached code and mint a brand-new one (comp E3
+    /// "Generate a fresh code"). The old code simply expires on its own.
+    func regeneratePairCode(spaceTitle: String) async throws -> String {
+        defaults.removeObject(forKey: pairCodeKey)
+        defaults.removeObject(forKey: pairCodeExpiryKey)
+        await MainActor.run { self.pairCodeExpiresAt = nil }
+        return try await publishPairCode(spaceTitle: spaceTitle)
     }
 
     /// Partner: turn a typed/deep-linked code into invite metadata for the confirm
@@ -572,6 +632,8 @@ final class FirebaseService: ObservableObject {
         setRole(.none)
         setSpaceId(nil)
         defaults.removeObject(forKey: pairCodeKey)
+        defaults.removeObject(forKey: pairCodeExpiryKey)
+        pairCodeExpiresAt = nil
     }
 
     private func log(_ msg: String) { print("[Firebase] \(msg)") }

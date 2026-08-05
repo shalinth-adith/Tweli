@@ -31,30 +31,32 @@ extension Color {
     }
 }
 
-// MARK: - Brand palette (exact design values)
+// MARK: - Brand palette
 
+/// Thin alias layer over the L/N palette in DesignSystem.swift. These names are
+/// kept because the pairing screens read better with them, but every value now
+/// resolves through the same two palettes as the rest of the app — there is no
+/// second source of truth.
 enum Brand {
-    static let indigo = Color(hex: "5E5CE6")
-    static let indigoLift = Color(hex: "7B79FF")
-    static let pink = Color(hex: "FF2D55")
-    static let pinkLift = Color(hex: "FF5E7E")
-    static let green = Color(hex: "34C759")
+    static var indigo: Color { .twAccent2 }
+    static var indigoLift: Color { Color(UIColor.tw(0x7B79FF)) }
+    static var pink: Color { .twAccent }
+    static var pinkLift: Color { Color(UIColor.tw(0xFF5E7E)) }
+    static var green: Color { .twSuccess }
 
-    /// The pink→indigo CTA gradient, lifted slightly in dark mode to glow on ink.
-    static func cta(_ scheme: ColorScheme) -> LinearGradient {
-        LinearGradient(
-            colors: scheme == .dark ? [indigoLift, pinkLift] : [indigo, pink],
-            startPoint: .leading, endPoint: .trailing
-        )
+    /// The primary CTA — comp: `linear-gradient(135deg, #7B79FF, #FF375F)`, i.e.
+    /// indigo into pink along the diagonal. Identical in both modes; the comp
+    /// relies on the glow beneath it, not a different gradient, to sit on black.
+    static func cta(_ scheme: ColorScheme = .light) -> LinearGradient {
+        LinearGradient(colors: [Color(UIColor.tw(0x7B79FF)), Color(UIColor.tw(0xFF375F))],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    /// Avatar gradients — "you" reads indigo, "partner" reads pink.
-    static func youGradient() -> LinearGradient {
-        LinearGradient(colors: [indigoLift, indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-    static func partnerGradient() -> LinearGradient {
-        LinearGradient(colors: [pinkLift, pink], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
+    /// Avatar gradients. Per the comp (L2/A7 and every header), YOU are the pink
+    /// end of the thread and your PARTNER is the indigo end — the same two dots
+    /// as the app mark, in the same order, everywhere.
+    static func youGradient() -> LinearGradient { TweliGradient.meAvatar }
+    static func partnerGradient() -> LinearGradient { TweliGradient.partnerAvatar }
 }
 
 // MARK: - Gradient backdrop + twinkles
@@ -65,14 +67,9 @@ struct BrandBackground: View {
     @Environment(\.colorScheme) private var scheme
     var animateTwinkles = true
 
-    private var stops: [Color] {
-        scheme == .dark
-            ? [Color(hex: "16112A"), Color(hex: "0D0A16"), Color(hex: "160B12")]
-            : [Color(hex: "FFFFFF"), Color(hex: "F4F3FF"), Color(hex: "FFEFF2")]
-    }
-
     var body: some View {
-        LinearGradient(colors: stops, startPoint: .top, endPoint: .bottom)
+        // Comp L1/L2/N1/N2: a 170° sky — dawn on light, aurora on dark.
+        TweliGradient.sky(scheme)
             .overlay(GeometryReader { geo in
                 ZStack {
                     twinkle(0.17, 0.15, scheme == .dark ? Brand.indigoLift : Brand.indigo, 5, 0, geo.size)
@@ -164,8 +161,8 @@ private struct ThreadPath: Shape {
 
 // MARK: - Avatar bubble
 
-/// A round avatar showing a single initial on a brand gradient. `isPartner`
-/// flips it to the pink gradient.
+/// A round avatar showing a single initial on a brand gradient. You are pink;
+/// `isPartner` flips it to the indigo gradient (comp L2/A7).
 struct AvatarBubble: View {
     let initial: String
     var isPartner = false
@@ -180,7 +177,7 @@ struct AvatarBubble: View {
                     .font(.system(size: size * 0.4, weight: .semibold))
                     .foregroundStyle(.white)
             )
-            .shadow(color: (isPartner ? Brand.pink : Brand.indigo).opacity(0.32), radius: 12, y: 6)
+            .shadow(color: (isPartner ? Brand.indigo : Brand.pink).opacity(0.4), radius: 12)
     }
 }
 
@@ -198,7 +195,7 @@ struct ProfileAvatar: View {
                 .resizable().scaledToFill()
                 .frame(width: size, height: size)
                 .clipShape(Circle())
-                .shadow(color: (isPartner ? Brand.pink : Brand.indigo).opacity(0.3), radius: size * 0.18, y: size * 0.09)
+                .shadow(color: (isPartner ? Brand.indigo : Brand.pink).opacity(0.35), radius: size * 0.18)
         } else {
             AvatarBubble(initial: profile?.initials ?? "", isPartner: isPartner, size: size)
         }
@@ -233,8 +230,9 @@ struct BrandCTA: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 56)
-            .background(Brand.cta(scheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: Brand.pink.opacity(scheme == .dark ? 0.35 : 0.3), radius: 16, y: 10)
+            .background(Brand.cta(), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            // Comp: box-shadow 0 0 30px rgba(255,55,95,0.35) — a centred glow.
+            .shadow(color: Brand.pink.opacity(0.35), radius: 15)
         }
         .buttonStyle(PressableButtonStyle())
     }

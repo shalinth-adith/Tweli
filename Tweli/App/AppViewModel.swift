@@ -94,7 +94,7 @@ final class AppViewModel: ObservableObject {
         guard let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first(where: { $0.name == "code" })?.value else { return }
         let code = FirebaseService.normalizePairCode(raw)
-        guard code.count == 6 else { return }
+        guard FirebaseService.isPlausiblePairCode(code) else { return }
         pendingJoinCode = code
     }
 
@@ -118,6 +118,9 @@ final class AppViewModel: ObservableObject {
     let cloud = FirebaseService()
     let notifications = ReminderNotificationService()
     let widget = WidgetDataService()
+    /// Light / Dark / Auto — applied as a preferredColorScheme at the root, which
+    /// is what makes the L and N palettes selectable (see DesignSystem.swift).
+    let theme = ThemeService()
 
     let coupleSpaceService: CoupleSpaceService
     let reminderService: ReminderService
@@ -190,6 +193,13 @@ final class AppViewModel: ObservableObject {
         // No partner yet → a sentinel id that matches no real record (empty data).
         let partnerId = coupleSpaceService.partner?.id ?? Self.noPartnerId
         reminderService.currentUserId = meId
+        // The partner's name appears inside already-scheduled alerts, so when it
+        // arrives (they joined) or changes (they renamed), the pending alerts
+        // have to be rewritten — rescheduling is idempotent, keyed by reminder id.
+        let newPartnerName = coupleSpaceService.partner?.displayName ?? ""
+        let partnerNameChanged = reminderService.partnerName != newPartnerName
+        reminderService.partnerName = newPartnerName
+        if partnerNameChanged, didBootstrap { reminderService.scheduleAll() }
         moodService.currentUserId = meId
         moodService.partnerId = partnerId
         locationService.currentUserId = meId
@@ -214,27 +224,17 @@ final class AppViewModel: ObservableObject {
 
     /// Assemble the "at a glance" widget snapshot from the current data.
     func refreshWidget() {
-        let cd = countdownService.pinned
+        // Every field is real or empty — the widget renders its own "nothing
+        // shared yet" state rather than being handed a stand-in string.
+        let cd = countdownService.countdowns.first { $0.category == .meeting } ?? countdownService.pinned
         let mood = moodService.partnerMood
-        let date = virtualDateService.next
-        let ping = missingYouService.history.first
-        let pingFrom = ping.map {
-            $0.sentBy == currentUser.id ? "You" : (coupleSpaceService.partner?.displayName ?? "Partner")
-        } ?? "—"
         let snapshot = WidgetSnapshot(
             daysUntil: cd?.daysRemaining ?? 0,
-            countdownTitle: cd?.title ?? "No countdown yet",
-            partnerName: coupleSpaceService.partner?.displayName ?? "Partner",
-            partnerMood: mood?.displayLabel ?? "—",
-            partnerMoodEmoji: mood?.mood.emoji ?? "💗",
-            nextDateTitle: date?.title ?? "No date planned",
-            nextDateTime: date.map { $0.date.formatted(date: .omitted, time: .shortened) } ?? "—",
-            partnerMoodNote: mood?.note ?? "",
             countdownProgress: cd?.progress ?? 0,
-            userInitial: currentUser.initials,
-            lastPingMessage: ping?.message ?? "Send a little love",
-            lastPingFrom: pingFrom,
-            lastPingWhen: ping?.relativeLabel ?? ""
+            partnerName: coupleSpaceService.partner?.displayName ?? "Your partner",
+            partnerMood: mood?.displayLabel ?? "",
+            partnerMoodNote: mood?.note ?? "",
+            userInitial: currentUser.initials
         )
         widget.update(snapshot)
     }
