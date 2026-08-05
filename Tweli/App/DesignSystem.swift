@@ -33,6 +33,9 @@ struct TwPalette {
     let elevated2: UIColor           // card nested inside a card / grouped row
     let elevatedWarm: UIColor        // top stop of the "next up" group's warm wash
     let barBackground: UIColor       // floating tab bar + sticky headers
+    let sheetSurface: UIColor        // a presented sheet's own backdrop (comp R1/R3)
+    let sheetBackdrop: UIColor       // what's visible behind the sheet
+    let fieldFill: UIColor           // the value pill on a settings row ("9:00 PM")
 
     // Ink
     let ink: UIColor                 // titles, values
@@ -56,6 +59,7 @@ struct TwPalette {
     let warnInk: UIColor             // warn used as text
     let success: UIColor
     let danger: UIColor              // the single destructive action ("Leave this space")
+    let dangerInk: UIColor           // inline validation copy (comp R2)
 
     // Letter paper — the opened letter is warm stationery in BOTH modes
     // (comp L7 "warm paper", N7 "candlelit paper"), never a plain card.
@@ -90,6 +94,9 @@ extension TwPalette {
         elevated2:      .tw(0xF2F0FF),
         elevatedWarm:   .tw(0xFFF0F3),
         barBackground:  .tw(0xFFFFFF, 0.94),
+        sheetSurface:   .tw(0xF2F1F6),
+        sheetBackdrop:  .tw(0xDCDBE2),
+        fieldFill:      UIColor(red: 120/255, green: 120/255, blue: 128/255, alpha: 0.10),
 
         ink:            .tw(0x1C1C1E),
         inkSecondary:   .tw(0x6D6D72),
@@ -109,6 +116,7 @@ extension TwPalette {
         warnInk:        .tw(0xB96E00),
         success:        .tw(0x30D158),
         danger:         .tw(0xFF3B30),
+        dangerInk:      .tw(0xD70015),
 
         paperTop:       .tw(0xFFFCF4),
         paperBottom:    .tw(0xFBF2E2),
@@ -135,6 +143,9 @@ extension TwPalette {
         elevated2:      .tw(0x16112A),
         elevatedWarm:   .tw(0x241A20),
         barBackground:  .tw(0x1C1C1E, 0.95),
+        sheetSurface:   .tw(0x161618),
+        sheetBackdrop:  .tw(0x000000),
+        fieldFill:      .tw(0xFFFFFF, 0.08),
 
         ink:            .tw(0xFFFFFF),
         inkSecondary:   .twLabel(0.55),
@@ -154,6 +165,7 @@ extension TwPalette {
         warnInk:        .tw(0xFF9F0A),
         success:        .tw(0x30D158),
         danger:         .tw(0xFF453A),
+        dangerInk:      .tw(0xFF6B61),
 
         paperTop:       .tw(0x26201B),
         paperBottom:    .tw(0x1C1A18),
@@ -221,6 +233,8 @@ extension Color {
     static let twSuccess     = Color(UIColor.twDynamic(\.success))
     /// Destructive — comp L9/N9 "Leave this space" (#FF3B30 / #FF453A).
     static let twDanger      = Color(UIColor.twDynamic(\.danger))
+    /// Inline validation copy — readable on the sheet, unlike the fill red.
+    static let twDangerInk   = Color(UIColor.twDynamic(\.dangerInk))
     static let twWarn        = Color(UIColor.twDynamic(\.warn))
     static let twWarnInk     = Color(UIColor.twDynamic(\.warnInk))
     /// Informational blue — the "N km apart" distance band.
@@ -235,6 +249,11 @@ extension Color {
     static let twElevatedWarm = Color(UIColor.twDynamic(\.elevatedWarm))
     /// Floating bar / sticky header fill.
     static let twBar         = Color(UIColor.twDynamic(\.barBackground))
+    /// A presented sheet's own surface — L #F2F1F6 / N #161618 (comp R1/R3).
+    static let twSheet       = Color(UIColor.twDynamic(\.sheetSurface))
+    static let twSheetBackdrop = Color(UIColor.twDynamic(\.sheetBackdrop))
+    /// The value pill on a settings row ("9:00 PM").
+    static let twFieldFill   = Color(UIColor.twDynamic(\.fieldFill))
 
     static let twInk           = Color(UIColor.twDynamic(\.ink))
     static let twInkSecondary  = Color(UIColor.twDynamic(\.inkSecondary))

@@ -2,9 +2,10 @@
 //  RootView.swift
 //  Tweli
 //
-//  Top-level routing: Splash → (Onboarding if not connected) → MainTabView.
-//  A fresh install has no couple space, so it runs the full A1–A7 entry flow;
-//  Onboarding is reachable again after "Leave this space" in Our space.
+//  Top-level routing: Splash → (Onboarding if not connected) → MainTabView,
+//  with comp E6 ("… left the space") taking over the whole window when the
+//  partner walks out. A fresh install has no couple space, so it runs the full
+//  entry flow; onboarding is reachable again after "Leave this space".
 //
 
 import SwiftUI
@@ -19,6 +20,16 @@ struct RootView: View {
         ZStack {
             if app.showSplash {
                 SplashView()
+                    .transition(.opacity)
+            } else if let failure = app.fatalSyncError {
+                // Comp E8. Only unrecoverable sync failures land here; being
+                // offline shows the E1 banner on Home instead.
+                SomethingSnappedView(detail: failure) { app.retryAfterFatalError() }
+                    .transition(.opacity)
+            } else if let goneName = app.partnerLeftName {
+                // Comp E6. Sits above the tab bar rather than inside it: the
+                // space is half a thread now, and the tabs would be lying.
+                PartnerLeftView(partnerName: goneName)
                     .transition(.opacity)
             } else if !auth.isSignedIn {
                 SignInView()
@@ -41,6 +52,8 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.35), value: auth.isSignedIn)
         .animation(.easeInOut(duration: 0.35), value: couple.hasCompletedAboutYou)
         .animation(.easeInOut(duration: 0.35), value: couple.isConnected)
+        .animation(.easeInOut(duration: 0.35), value: app.partnerLeftName)
+        .animation(.easeInOut(duration: 0.35), value: app.fatalSyncError)
         .sheet(item: $app.pendingInvite) { invite in
             JoinConfirmView(invite: invite)
                 .environmentObject(app)

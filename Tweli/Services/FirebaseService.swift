@@ -68,6 +68,14 @@ final class FirebaseService: ObservableObject {
     /// When the current pair code stops working. Drives the invite screen's
     /// "Expires in N hours" line and its expired state (comp A5 / E3).
     @Published private(set) var pairCodeExpiresAt: Date?
+
+    /// The pair code currently published for this space — the one that actually
+    /// redeems. NOT `CoupleSpace.inviteCode`, which is a local UUID slice that
+    /// was never written to Firestore and would never let anyone in.
+    var activePairCode: String? {
+        let code = defaults.string(forKey: pairCodeKey) ?? ""
+        return code.isEmpty ? nil : code
+    }
     /// Same key AuthService persists the display name under — the owner/participant
     /// name written into `memberNames` and pair codes is read from here so
     /// `createSpace(title:)` / `publishPairCode` need no extra name argument.
@@ -84,6 +92,12 @@ final class FirebaseService: ObservableObject {
     }
 
     private var listeners: [ListenerRegistration] = []
+
+    /// Set when a live listener fails in a way retrying won't fix — the space is
+    /// gone, or this user is no longer allowed to read it. Drives comp E8.
+    /// Transient errors (offline, timeouts) are NOT reported here: Firestore's
+    /// cache keeps serving, and a network blip must never take over the screen.
+    @Published private(set) var fatalSyncError: String?
 
     init() {
         role = Role(rawValue: defaults.string(forKey: roleKey) ?? "none") ?? .none
@@ -519,6 +533,8 @@ final class FirebaseService: ObservableObject {
         var payloadsByType: [String: [Data]] = [:]     // keyed by RType
         var deletedIDs: [UUID] = []
         var partnerJoinedName: String? = nil           // set when the space doc shows member #2
+        /// Set when the OTHER member removed themselves from the space (comp E6).
+        var partnerLeftName: String? = nil
     }
 
     /// Attach live listeners on the space doc + all six item subcollections (7
@@ -533,7 +549,10 @@ final class FirebaseService: ObservableObject {
         for type in RType.all {
             let reg = spaceRef.collection(type).addSnapshotListener { snapshot, error in
                 guard let snapshot else {
-                    if let error { self.log("listener \(type) error: \(error.localizedDescription)") }
+                    if let error {
+                        self.log("listener \(type) error: \(error.localizedDescription)")
+                        self.reportIfFatal(error)
+                    }
                     return
                 }
                 var changes = RemoteChanges()
@@ -560,12 +579,26 @@ final class FirebaseService: ObservableObject {
         }
 
         let spaceReg = spaceRef.addSnapshotListener { snapshot, error in
+            if let error { self.reportIfFatal(error) }
             guard let data = snapshot?.data() else { return }
             let members = data["memberUids"] as? [String] ?? []
-            guard members.count == 2 else { return }
             let names = data["memberNames"] as? [String: String] ?? [:]
-            let partnerName = names.first(where: { $0.key != self.currentUid })?.value ?? "Your partner"
             var changes = RemoteChanges()
+
+            // The partner walked out: they removed themselves and stamped
+            // `leftBy`. We're the only member left, and the uid on the stamp is
+            // not ours (a stale marker from our OWN earlier departure must not
+            // raise E6 on a space we later rejoined).
+            if let leftBy = data["leftBy"] as? String,
+               leftBy != self.currentUid,
+               members.count == 1, members.first == self.currentUid {
+                changes.partnerLeftName = names[leftBy] ?? "Your partner"
+                onChange(changes)
+                return
+            }
+
+            guard members.count == 2 else { return }
+            let partnerName = names.first(where: { $0.key != self.currentUid })?.value ?? "Your partner"
             changes.partnerJoinedName = partnerName
             onChange(changes)
         }
@@ -577,6 +610,24 @@ final class FirebaseService: ObservableObject {
         listeners.forEach { $0.remove() }
         listeners.removeAll()
     }
+
+    /// Only permission-denied and not-found are fatal. Everything else — most
+    /// importantly `.unavailable` — is a network condition the offline cache
+    /// already absorbs, and must not raise the failure screen.
+    private func reportIfFatal(_ error: Error) {
+        let code = FirestoreErrorCode.Code(rawValue: (error as NSError).code)
+        switch code {
+        case .permissionDenied:
+            fatalSyncError = "We can't reach your shared space right now."
+        case .notFound:
+            fatalSyncError = "That shared space no longer exists."
+        default:
+            break
+        }
+    }
+
+    /// Comp E8 "Try again" — clear the failure and re-attach the listeners.
+    func clearFatalSyncError() { fatalSyncError = nil }
 
     /// One-shot pull of the current item set (pull-to-refresh / first sync before
     /// listeners settle). Listener-independent.
@@ -627,6 +678,30 @@ final class FirebaseService: ObservableObject {
     /// local-only: the security rules forbid removing a member or deleting the
     /// space, so no remote write is attempted — the space stays intact for the
     /// partner.
+    /// Remove myself from the shared space and stamp the departure so the other
+    /// device can show comp E6. Items are deliberately left in place — the copy
+    /// promises "everything you wrote together is safe for 30 days", and a
+    /// client-side purge would break that promise the moment it ran.
+    ///
+    /// Best-effort: if the write fails (offline, or the rule rejects it) we
+    /// still tear down locally, because refusing to let someone leave is worse
+    /// than the partner learning about it late.
+    func announceLeave() async {
+        guard !isDevOrOffline, let spaceId, let uid = currentUid else { return }
+        do {
+            try await db.collection("spaces").document(spaceId).updateData([
+                "memberUids": FieldValue.arrayRemove([uid]),
+                "fcmTokens.\(uid)": FieldValue.delete(),
+                "leftBy": uid,
+                "leftAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp()
+            ])
+            log("announced leave of space \(spaceId)")
+        } catch {
+            log("announceLeave failed: \(error.localizedDescription)")
+        }
+    }
+
     func reset() {
         stopListening()
         setRole(.none)

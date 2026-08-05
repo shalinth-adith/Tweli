@@ -20,6 +20,15 @@ final class AppViewModel: ObservableObject {
     /// The share is only accepted once the user taps Join (see `confirmPendingJoin`).
     @Published var pendingInvite: PendingInvite?
 
+    /// Mirrors `cloud.fatalSyncError` so RootView — which observes this object,
+    /// not the nested service — can raise comp E8.
+    @Published var fatalSyncError: String?
+
+    /// Set when the partner removed themselves from the space — drives the
+    /// full-screen E6 "…left the space" scene. Carries their name so the copy
+    /// can say who, not "your partner".
+    @Published var partnerLeftName: String?
+
     /// Drives the full-screen "Tying your thread…" waiting screen (design 19g/h)
     /// shown to the owner after they create a space, until their partner joins.
     @Published var showJoiningWaiter = false
@@ -167,6 +176,12 @@ final class AppViewModel: ObservableObject {
                 self.wireIdentities()
             }
             .store(in: &cancellables)
+
+        // Nested ObservableObjects don't propagate through @EnvironmentObject,
+        // so republish the one piece of cloud state the root routes on.
+        cloud.$fatalSyncError
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$fatalSyncError)
     }
 
     // MARK: - Convenience
@@ -303,9 +318,33 @@ final class AppViewModel: ObservableObject {
         Task { await cloud.updateMyMemberName(coupleSpaceService.currentUser.displayName) }
     }
 
-    /// Leave the shared space: clear local couple state AND detach cloud
+    /// Leave the shared space: announce the departure so the partner's device
+    /// can show E6, then clear local couple state AND detach cloud
     /// role/spaceId/listeners so a later join binds cleanly to the new space.
+    ///
+    /// The announcement is awaited before the teardown, because `cloud.reset()`
+    /// drops the spaceId the write needs.
     func leaveSpace() {
+        Task {
+            await cloud.announceLeave()
+            coupleSpaceService.disconnect()
+            cloud.reset()
+            listeningSpaceId = nil
+            partnerLeftName = nil
+        }
+    }
+
+    /// Comp E8 "Try again" — drop the failure and re-attach the listeners.
+    func retryAfterFatalError() {
+        cloud.clearFatalSyncError()
+        listeningSpaceId = nil      // force startListening to re-bind
+        syncNow()
+    }
+
+    /// E6 → "Send a new invite": stay signed in, drop the dead space, and land
+    /// back on Start-or-join so a fresh code can be minted.
+    func startFreshAfterPartnerLeft() {
+        partnerLeftName = nil
         coupleSpaceService.disconnect()
         cloud.reset()
         listeningSpaceId = nil
@@ -319,6 +358,14 @@ final class AppViewModel: ObservableObject {
         // name (replaces the owner-side acceptedParticipantName() poll). Applied
         // unconditionally: gating on awaitingPartner froze the join-time "You"
         // placeholder forever on the participant's device.
+        // The partner walked out (comp E6). Raise the scene and stop here —
+        // there is nothing else in this batch worth merging into a space that
+        // no longer has two people in it.
+        if let goneName = changes.partnerLeftName {
+            coupleSpaceService.updatePartnerName(goneName)
+            partnerLeftName = goneName
+            return
+        }
         if let name = changes.partnerJoinedName {
             coupleSpaceService.updatePartnerName(name)
             wireIdentities()   // partner may have just been created — rewire ids

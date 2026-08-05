@@ -197,6 +197,48 @@ final class ReminderService: ObservableObject {
         if !deletedIDs.isEmpty { reminders.removeAll { deletedIDs.contains($0.id) } }
     }
 
+    // MARK: - Sorting (comp S1 "Sort by")
+
+    enum SortOrder: String, CaseIterable, Identifiable {
+        case soonest, byPerson, byPriority
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .soonest:    return "Soonest first"
+            case .byPerson:   return "By person"
+            case .byPriority: return "By priority"
+            }
+        }
+    }
+
+    /// Applies a comp S1 sort order. `byPerson` groups mine first, then the
+    /// partner's, then shared ones; `byPriority` floats the important ones. Both
+    /// fall back to time so the order is always total and stable.
+    func sorted(_ items: [ReminderItem], by order: SortOrder) -> [ReminderItem] {
+        switch order {
+        case .soonest:
+            return items.sorted { $0.localFireDate < $1.localFireDate }
+        case .byPerson:
+            func rank(_ r: ReminderItem) -> Int {
+                switch r.assignedTo {
+                case .me:      return r.createdBy == currentUserId ? 0 : 1
+                case .partner: return r.createdBy == currentUserId ? 1 : 0
+                case .both:    return 2
+                }
+            }
+            return items.sorted {
+                rank($0) != rank($1) ? rank($0) < rank($1)
+                                     : $0.localFireDate < $1.localFireDate
+            }
+        case .byPriority:
+            func rank(_ r: ReminderItem) -> Int { r.priority == .important ? 0 : 1 }
+            return items.sorted {
+                rank($0) != rank($1) ? rank($0) < rank($1)
+                                     : $0.localFireDate < $1.localFireDate
+            }
+        }
+    }
+
     /// Today's completion progress (0…1) for the Home "today progress" ring.
     var todayProgress: Double {
         let items = today

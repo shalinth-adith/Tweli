@@ -45,9 +45,11 @@ struct SettingsView: View {
                              couple.partner?.displayName ?? "Not connected", tint: .twAccent)
                     divider
                     valueRow("arrow.triangle.2.circlepath", "Sync", syncStatusText, tint: .twAccent2)
-                    if let code = couple.coupleSpace?.inviteCode {
+                    if let code = app.cloud.activePairCode {
                         divider
-                        valueRow("number", "Invite code", code, tint: .twAccent2, monospaced: true)
+                        valueRow("number", "Invite code",
+                                 FirebaseService.formatPairCode(code),
+                                 tint: .twAccent2, monospaced: true)
                     }
                 }
 

@@ -6,10 +6,10 @@
 //  to-do list: a "Today, together" progress card, then time-of-day groups, then
 //  "Done today" faded back. The next reminder due is the only lit thing.
 //
-//  The comp shows today only. The scope chips are kept (restyled to the comp's
-//  chip language) so Upcoming / Repeating / Missed stay reachable — the comp
-//  never says those views should disappear, and dropping them would lose data
-//  the user has already entered.
+//  Filtering follows comp S1: a "Showing · Today · soonest first" summary that
+//  doubles as the trigger for a menu carrying Show (Today / Upcoming /
+//  Repeating / Missed, each with its count) and Sort by (Soonest first / By
+//  person / By priority). This replaced an earlier chip row.
 //
 
 import SwiftUI
@@ -24,13 +24,14 @@ struct ReminderListView: View {
     }
 
     @State private var scope: Scope = .today
+    @State private var sort: ReminderService.SortOrder = .soonest
     @State private var showAdd = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                scopeBar
+                showingBar
                 if scope == .today { todayBody } else { scopedBody }
             }
             .padding(.horizontal, 20)
@@ -51,49 +52,107 @@ struct ReminderListView: View {
                 .tracking(-0.6)
                 .foregroundStyle(Color.twInk)
             Spacer()
-            Button { showAdd = true } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus").font(.system(size: 12, weight: .bold))
-                    Text("New").font(.system(size: 13.5, weight: .bold))
+            HStack(spacing: 9) {
+                // Comp S1 puts the accent on the FILTER, not on New — the list
+                // is the thing you act on most once reminders exist.
+                filterMenu {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 37, height: 37)
+                        .background(Color.twAccent, in: Circle())
+                        .shadow(color: Color.twAccent.opacity(0.45), radius: 9)
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-                .background(Color.twAccent, in: Capsule())
-                .shadow(color: Color.twAccent.opacity(0.35), radius: 11)
+                Button { showAdd = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus").font(.system(size: 12, weight: .bold))
+                        Text("New").font(.system(size: 13.5, weight: .bold))
+                    }
+                    .foregroundStyle(Color.twInk)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(Color.twInkTertiary.opacity(0.16), in: Capsule())
+                }
+                .buttonStyle(PressableButtonStyle())
             }
-            .buttonStyle(PressableButtonStyle())
         }
         .padding(.top, 8)
     }
 
-    // MARK: - Scope chips
+    // MARK: - "Showing · Today · soonest first" (comp S1)
 
-    private var scopeBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+    /// The summary line doubles as the menu trigger — the comp anchors the menu
+    /// under it, so tapping the thing that describes the filter changes it.
+    private var showingBar: some View {
+        filterMenu {
+            HStack(spacing: 7) {
+                Text("Showing")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Color.twInkTertiary)
+                HStack(spacing: 5) {
+                    Text("\(scope.rawValue) · \(sort.label.lowercased())")
+                        .font(.system(size: 12.5, weight: .bold))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .foregroundStyle(Color.twAccentInk)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 4)
+                .background(Color.twAccentSoft, in: Capsule())
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.top, 14)
+        .padding(.bottom, 16)
+    }
+
+    /// One menu definition, two triggers (the round button and the summary pill).
+    /// The generic is `Trigger`, not `Label` — that name is SwiftUI's own view.
+    private func filterMenu<Trigger: View>(@ViewBuilder trigger: () -> Trigger) -> some View {
+        Menu {
+            Section("Show") {
                 ForEach(Scope.allCases) { s in
-                    let on = scope == s
-                    Button { withAnimation(.snappy) { scope = s } } label: {
-                        Text(s.rawValue)
-                            .font(.system(size: 13, weight: on ? .bold : .semibold))
-                            .foregroundStyle(on ? Color.white : Color.twInkChip)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(on ? Color.twAccent : Color.twElevated,
-                                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .strokeBorder(on ? .clear : Color.twHairline, lineWidth: 1)
-                            }
+                    // A count rides along so "Missed (2)" is visible without
+                    // switching to it, exactly as the comp shows.
+                    let n = count(for: s)
+                    let title = n > 0 ? "\(s.rawValue)  (\(n))" : s.rawValue
+                    Button {
+                        withAnimation(.snappy) { scope = s }
+                    } label: {
+                        if scope == s {
+                            Label(title, systemImage: "checkmark")
+                        } else {
+                            Text(title)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical, 16)
-            .padding(.horizontal, 2)
+            Section("Sort by") {
+                ForEach(ReminderService.SortOrder.allCases) { o in
+                    Button {
+                        withAnimation(.snappy) { sort = o }
+                    } label: {
+                        if sort == o {
+                            Label(o.label, systemImage: "checkmark")
+                        } else {
+                            Text(o.label)
+                        }
+                    }
+                }
+            }
+        } label: {
+            trigger()
         }
-        .scrollClipDisabled()
+        .buttonStyle(.plain)
+    }
+
+    private func count(for s: Scope) -> Int {
+        switch s {
+        case .today:     return service.today.count
+        case .upcoming:  return service.upcoming.count
+        case .repeating: return service.repeating.count
+        case .missed:    return service.missed.count
+        }
     }
 
     // MARK: - Today (the comp's layout)
@@ -114,8 +173,12 @@ struct ReminderListView: View {
         }
     }
 
-    private var pending: [ReminderItem] { service.today.filter { !$0.isCompleted } }
-    private var done: [ReminderItem] { service.today.filter(\.isCompleted) }
+    private var pending: [ReminderItem] {
+        service.sorted(service.today.filter { !$0.isCompleted }, by: sort)
+    }
+    private var done: [ReminderItem] {
+        service.sorted(service.today.filter(\.isCompleted), by: sort)
+    }
 
     /// Comp: "Today, together · 4 of 5 done", a 7pt thread-gradient bar, and one
     /// sentence about what is left.
@@ -237,7 +300,7 @@ struct ReminderListView: View {
         if items.isEmpty {
             emptyScope
         } else {
-            groupCard(items, highlighted: false)
+            groupCard(service.sorted(items, by: sort), highlighted: false)
         }
     }
 

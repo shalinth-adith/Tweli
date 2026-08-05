@@ -14,9 +14,9 @@ struct CoupleSpace: Identifiable, Codable, Hashable {
     var partnerIds: [UUID]
     var createdAt: Date = Date()
 
-    /// Short token embedded in the invite link (CloudKit CKShare URL later).
-    var inviteCode: String = String(UUID().uuidString.prefix(6)).uppercased()
-
-    /// The shareable invite link a partner opens/pastes to join this space.
-    var inviteLink: String { "https://tweli.app/join/\(inviteCode)" }
+    // NOTE: this model deliberately carries NO invite code. The code that
+    // actually redeems lives in Firestore at `pairCodes/{code}` and is surfaced
+    // by `FirebaseService.activePairCode`. A locally-generated one used to live
+    // here and was shown to users — it was never published, so nobody could
+    // ever join with it.
 }

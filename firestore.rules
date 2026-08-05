@@ -41,11 +41,12 @@ service cloud.firestore {
         && request.resource.data.title.size() >= 1
         && request.resource.data.title.size() <= 100;
 
-      // UPDATE — two allowed shapes:
+      // UPDATE — three allowed shapes:
       //  (a) JOIN: a non-member atomically becomes the 2nd member (max 2, no takeover).
       //  (b) MEMBER EDIT: an existing member updates title/memberNames/updatedAt only.
+      //  (c) LEAVE: an existing member removes only themselves and stamps leftBy.
       allow update: if isSignedIn() && (
-        isAtomicJoin(spaceId) || isMemberEdit(spaceId)
+        isAtomicJoin(spaceId) || isMemberEdit(spaceId) || isMemberLeave(spaceId)
       );
 
       // Never delete the space from the client (leave() clears local state only).
@@ -68,6 +69,21 @@ service cloud.firestore {
           && request.resource.data.memberNames.keys().hasOnly(
                resource.data.memberNames.keys().concat([request.auth.uid]))
           && request.resource.data.memberNames[request.auth.uid] is string;
+      }
+
+      // (c) LEAVE: a member removes ONLY themselves and stamps who left, so the
+      // remaining partner's listener can surface E6 instead of silently seeing
+      // a half-empty space. They cannot remove the other person, change the
+      // owner, or add anyone on the way out.
+      function isMemberLeave(spaceId) {
+        return
+          request.auth.uid in resource.data.memberUids
+          && !(request.auth.uid in request.resource.data.memberUids)
+          && request.resource.data.memberUids.hasOnly(resource.data.memberUids)
+          && request.resource.data.memberUids.size() == resource.data.memberUids.size() - 1
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.leftBy == request.auth.uid;
       }
 
       // (b) Existing member edits metadata; membership + owner are frozen.
