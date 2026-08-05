@@ -19,7 +19,11 @@ struct RootView: View {
     var body: some View {
         ZStack {
             if app.showSplash {
-                SplashView()
+                // The splash owns its own timing and reports when the comp's
+                // sequence has finished. Previously the root cut it off after a
+                // fixed 2.5s, which landed right as the wordmark arrived — the
+                // animation never got to complete.
+                SplashView { app.showSplash = false }
                     .transition(.opacity)
             } else if let failure = app.fatalSyncError {
                 // Comp E8. Only unrecoverable sync failures land here; being
@@ -54,6 +58,9 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.35), value: couple.isConnected)
         .animation(.easeInOut(duration: 0.35), value: app.partnerLeftName)
         .animation(.easeInOut(duration: 0.35), value: app.fatalSyncError)
+        // The splash fades itself out, so the root only needs to swap what's
+        // underneath — a second cross-fade here would double the dissolve.
+        .animation(.easeInOut(duration: 0.25), value: app.showSplash)
         .sheet(item: $app.pendingInvite) { invite in
             JoinConfirmView(invite: invite)
                 .environmentObject(app)
@@ -64,11 +71,11 @@ struct RootView: View {
                 .environmentObject(couple)
         }
         .task {
-            // Let the entry animation play (dots + thread + wordmark land ~2.4s),
-            // then reveal the app. (Notification permission is asked once the user
-            // reaches the main app — see MainTabView.)
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            withAnimation(.easeInOut(duration: 0.5)) { app.showSplash = false }
+            // Safety net only. SplashView normally dismisses itself the moment
+            // its sequence ends (~4.5s); this guards against the view never
+            // appearing at all, which would otherwise strand the app on it.
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            if app.showSplash { app.showSplash = false }
         }
     }
 }
