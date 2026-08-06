@@ -167,16 +167,21 @@ final class ReminderService: ObservableObject {
 
     // MARK: - Filters (design tabs: Today / Upcoming / Repeating / Completed / Missed)
 
-    var today: [ReminderItem] { reminders.filter { $0.isToday }.sorted { $0.reminderDate < $1.reminderDate } }
-    var upcoming: [ReminderItem] { reminders.filter { $0.isUpcoming }.sorted { $0.reminderDate < $1.reminderDate } }
-    var missed: [ReminderItem] { reminders.filter { $0.isMissed }.sorted { $0.reminderDate > $1.reminderDate } }
+    // Every one of these filters on `localFireDate` (via isToday/isUpcoming/
+    // isMissed), so they must SORT on it too. Sorting on the raw `reminderDate`
+    // instant put cross-timezone reminders in an order that disagreed with the
+    // filter that selected them — most visibly around a midnight boundary,
+    // where a reminder can be "today" on one clock and not the other.
+    var today: [ReminderItem] { reminders.filter { $0.isToday }.sorted { $0.localFireDate < $1.localFireDate } }
+    var upcoming: [ReminderItem] { reminders.filter { $0.isUpcoming }.sorted { $0.localFireDate < $1.localFireDate } }
+    var missed: [ReminderItem] { reminders.filter { $0.isMissed }.sorted { $0.localFireDate > $1.localFireDate } }
     var completed: [ReminderItem] { reminders.filter { $0.isCompleted }.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) } }
-    var repeating: [ReminderItem] { reminders.filter { $0.isRepeating }.sorted { $0.reminderDate < $1.reminderDate } }
+    var repeating: [ReminderItem] { reminders.filter { $0.isRepeating }.sorted { $0.localFireDate < $1.localFireDate } }
 
     /// The soonest pending reminder — shown on the Home dashboard.
     var nextReminder: ReminderItem? {
-        reminders.filter { !$0.isCompleted && $0.reminderDate >= Date() }
-            .min { $0.reminderDate < $1.reminderDate }
+        reminders.filter { !$0.isCompleted && $0.localFireDate >= Date() }
+            .min { $0.localFireDate < $1.localFireDate }
     }
 
     /// Merge records that arrived from CloudKit (upsert by id, then apply deletes).

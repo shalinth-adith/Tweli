@@ -196,6 +196,9 @@ final class AppViewModel: ObservableObject {
                 }
 #endif
                 self.wireIdentities()
+                // A returning user may still be a member of a space this device
+                // knows nothing about (reinstall, new phone, or sign-out).
+                Task { await self.recoverSpaceIfNeeded() }
             }
             .store(in: &cancellables)
 
@@ -354,6 +357,27 @@ final class AppViewModel: ObservableObject {
             listeningSpaceId = nil
             partnerLeftName = nil
         }
+    }
+
+    /// Rejoin a space we are still a member of but have no local record of.
+    ///
+    /// Runs on sign-in and once at launch, and is a no-op whenever a spaceId is
+    /// already cached — so the normal path costs nothing. Without it, signing
+    /// out and back in (or reinstalling, or using a second phone) dropped the
+    /// user on Start-or-join while their space and partner sat intact in
+    /// Firestore.
+    func recoverSpaceIfNeeded() async {
+        guard !coupleSpaceService.isConnected else { return }
+        // At cold launch the Keychain session may not have been read yet, and
+        // the query guards on a non-nil uid — without this the launch-time
+        // attempt would silently no-op and recovery would wait for a re-sign-in.
+        await cloud.refreshAccountStatus()
+        guard let recovered = await cloud.restoreSpaceMembership() else { return }
+        coupleSpaceService.restoreFromRecoveredSpace(title: recovered.title,
+                                                     isOwner: recovered.isOwner,
+                                                     partnerName: recovered.partnerName)
+        wireIdentities()   // the partner may have just come back into existence
+        syncNow()          // attach listeners to the space we just re-bound to
     }
 
     /// Sign out WITHOUT leaving the shared space.

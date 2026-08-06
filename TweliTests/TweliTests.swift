@@ -47,6 +47,45 @@ struct TweliTests {
         #expect(!FirebaseService.isPlausiblePairCode("TWNK"))
     }
 
+    // -3 — ERROR: the reminder collections filter on `localFireDate` but used to
+    // SORT on the raw `reminderDate` instant. Across timezones the two orders
+    // can disagree, so the list came back in an order its own filter didn't
+    // agree with. This builds exactly that disagreement and pins the fix.
+    @Test("error: reminders sort by the same clock they are filtered on")
+    func remindersSortByLocalFireDate() {
+        // Two reminders whose ABSOLUTE instants are one order and whose WALL
+        // CLOCKS are the opposite: an 8:00 AM set in Tokyo happens earlier in
+        // absolute terms than a 9:00 AM set in New York, but reads as the later
+        // wall clock only if you compare the raw instants.
+        func reminder(_ title: String, hour: Int, zone: String) -> ReminderItem {
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: zone)!
+            let when = cal.date(from: DateComponents(year: 2026, month: 8, day: 12,
+                                                     hour: hour, minute: 0))!
+            return ReminderItem(title: title, createdBy: UUID(), coupleSpaceId: UUID(),
+                                reminderDate: when, authorTimezone: zone)
+        }
+        // Tokyo 09:00 == 00:00 UTC; New York 08:00 == 12:00 UTC.
+        let tokyo9 = reminder("Tokyo 9am", hour: 9, zone: "Asia/Tokyo")
+        let newYork8 = reminder("NY 8am", hour: 8, zone: "America/New_York")
+
+        // Raw instants: Tokyo first. Wall clocks: New York (8) before Tokyo (9).
+        #expect(tokyo9.reminderDate < newYork8.reminderDate)
+        #expect(newYork8.localFireDate < tokyo9.localFireDate)
+
+        // Ascending by wall clock must put the 8am first — the old sort on
+        // `reminderDate` returned the opposite.
+        let ascending = [tokyo9, newYork8].sorted { $0.localFireDate < $1.localFireDate }
+        #expect(ascending.first?.title == "NY 8am")
+
+        // And the shared sort helper agrees, so list views and the service can't
+        // drift apart.
+        let service = ReminderService(notifications: ReminderNotificationService(),
+                                      cloud: FirebaseService())
+        let viaHelper = service.sorted([tokyo9, newYork8], by: .soonest)
+        #expect(viaHelper.first?.title == "NY 8am")
+    }
+
     // -1 — ERROR: the New Reminder sheet's validation must be REACHABLE. The
     // title error only fires on an empty title, so if Save were disabled under
     // that same condition the message could never appear and the user would get

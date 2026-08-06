@@ -283,6 +283,66 @@ final class FirebaseService: ObservableObject {
         return n == codeLength || n == 6
     }
 
+    // MARK: - Space recovery
+
+    /// What a recovered space carries back to the client.
+    struct RecoveredSpace {
+        let spaceId: String
+        let title: String
+        let isOwner: Bool
+        /// The other member's name, if the space already has two people.
+        let partnerName: String?
+    }
+
+    /// Finds the caller's space by MEMBERSHIP rather than by cached id.
+    ///
+    /// `signOut()` clears role + spaceId, and spaceId was only ever restored
+    /// from UserDefaults — so a fresh install, a new phone, or a sign-out and
+    /// back in landed on Start-or-join even though the user is still in
+    /// `memberUids` and all their data is intact. It reads as "the app lost my
+    /// partner". This is the missing lookup.
+    ///
+    /// Rules-safe without any change to firestore.rules: the space `list` rule
+    /// already allows `request.auth.uid in resource.data.memberUids`, which is
+    /// exactly what this query filters on.
+    ///
+    /// Returns nil when there is nothing to recover — including when a spaceId
+    /// is already cached, since then there is nothing lost to find.
+    func restoreSpaceMembership() async -> RecoveredSpace? {
+        guard !isDevOrOffline, let uid = currentUid, spaceId == nil else { return nil }
+        do {
+            let snap = try await db.collection("spaces")
+                .whereField("memberUids", arrayContains: uid)
+                .limit(to: 1)
+                .getDocuments()
+            guard let doc = snap.documents.first else {
+                log("no existing space to recover for uid=\(uid)")
+                return nil
+            }
+            let data = doc.data()
+            let members = data["memberUids"] as? [String] ?? []
+            let names = data["memberNames"] as? [String: String] ?? [:]
+            let isOwner = (data["ownerUid"] as? String) == uid
+            let partnerUid = members.first { $0 != uid }
+
+            setSpaceId(doc.documentID)
+            setRole(isOwner ? .owner : .participant)
+            log("recovered space \(doc.documentID) by membership (owner: \(isOwner))")
+
+            return RecoveredSpace(
+                spaceId: doc.documentID,
+                title: (data["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Our space",
+                isOwner: isOwner,
+                partnerName: partnerUid.flatMap { names[$0] }
+            )
+        } catch {
+            // A failure here must not block sign-in; the user simply lands on
+            // Start-or-join as they did before, and the next launch retries.
+            log("restoreSpaceMembership failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     // MARK: - Space + pairing (invite flow)
 
     /// Owner: create the couple space document and become owner. Replaces

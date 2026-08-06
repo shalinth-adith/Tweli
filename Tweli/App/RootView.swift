@@ -69,6 +69,12 @@ struct RootView: View {
                 .environmentObject(couple)
         }
         .task {
+            // Recover a space this device has no local record of BEFORE the
+            // splash hands over, so a returning user never sees Start-or-join
+            // flash up over a space they are still a member of.
+            await app.recoverSpaceIfNeeded()
+        }
+        .task {
             // Safety net only. SplashView normally dismisses itself the moment
             // its sequence ends (~4.5s); this guards against the view never
             // appearing at all, which would otherwise strand the app on it.

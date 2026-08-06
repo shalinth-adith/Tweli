@@ -134,6 +134,26 @@ final class CoupleSpaceService: ObservableObject {
         completeSetup()
     }
 
+    /// Rebuild local couple state from a space recovered by membership (fresh
+    /// install / new device / sign-out and back in). Mirrors the join path's
+    /// reconstruction — a local CoupleSpace plus a partner derived from the
+    /// space doc's `memberNames` — and marks setup complete so RootView routes
+    /// to the space instead of Start-or-join.
+    func restoreFromRecoveredSpace(title: String, isOwner: Bool, partnerName: String?) {
+        let space = CoupleSpace(title: title,
+                                createdBy: isOwner ? currentUser.id : UUID(),
+                                partnerIds: [currentUser.id])
+        coupleSpace = space
+        // A name only exists once both members are in the space; without one we
+        // stay in the "waiting for partner" state rather than inventing them.
+        partner = partnerName.flatMap { name in
+            name.isEmpty ? nil : UserProfile(displayName: name, avatarEmoji: "💛")
+        }
+        save(space, spaceKey)
+        save(partner, partnerKey)
+        completeSetup()
+    }
+
     /// Owner side: called once CloudKit reports the invited person has accepted.
     func setPartnerJoined(name: String) {
         guard partner == nil else { return }
