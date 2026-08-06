@@ -13,7 +13,9 @@
 //  moon treatment. That is the whole point of the component — it is the one
 //  place the app tells you where in her day she is.
 //
-//  Renders nothing until the partner has shared a location with a time zone.
+//  Renders nothing until we know the partner's time zone. That arrives from
+//  THEIR device via the space doc (`memberTimezones`), so it needs no location
+//  permission from either of you — the city name is the only part that does.
 //
 
 import SwiftUI
@@ -24,7 +26,7 @@ struct PartnerLocalTimeBanner: View {
     /// The partner's city, e.g. "Abu Dhabi, UAE". Only the leading component is
     /// shown ("Abu Dhabi") so the sentence stays short.
     let cityLabel: String?
-    /// IANA identifier from the partner's shared location, e.g. "Asia/Dubai".
+    /// The partner's IANA zone, e.g. "Asia/Dubai" — see AppViewModel.partnerTimeZoneId.
     let timeZoneId: String?
 
     /// Ticks once a minute so the clock in the sentence stays honest.

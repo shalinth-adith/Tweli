@@ -20,7 +20,7 @@ struct DatesSheetView: View {
 
     @State private var showAdd = false
 
-    private var partnerZoneId: String? { location.partnerLocation?.timeZoneId }
+    private var partnerZoneId: String? { app.partnerTimeZoneId }
     private var partnerName: String { app.partner?.displayName ?? "Your partner" }
 
     /// Everything planned after the next one.

@@ -535,6 +535,10 @@ final class FirebaseService: ObservableObject {
         var partnerJoinedName: String? = nil           // set when the space doc shows member #2
         /// Set when the OTHER member removed themselves from the space (comp E6).
         var partnerLeftName: String? = nil
+        /// The partner's IANA zone, read off `memberTimezones` on the space doc.
+        /// Their device writes it on every sync, so this is available even when
+        /// they have never shared a location.
+        var partnerTimeZoneId: String? = nil
     }
 
     /// Attach live listeners on the space doc + all six item subcollections (7
@@ -598,8 +602,15 @@ final class FirebaseService: ObservableObject {
             }
 
             guard members.count == 2 else { return }
+            let partnerUid = members.first { $0 != self.currentUid }
             let partnerName = names.first(where: { $0.key != self.currentUid })?.value ?? "Your partner"
             changes.partnerJoinedName = partnerName
+            // The same doc already carries each member's zone for the push
+            // function's quiet hours; hand it to the client too.
+            if let partnerUid {
+                let zones = data["memberTimezones"] as? [String: String] ?? [:]
+                changes.partnerTimeZoneId = zones[partnerUid]
+            }
             onChange(changes)
         }
         listeners.append(spaceReg)

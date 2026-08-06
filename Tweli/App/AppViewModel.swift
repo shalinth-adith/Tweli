@@ -20,6 +20,25 @@ final class AppViewModel: ObservableObject {
     /// The share is only accepted once the user taps Join (see `confirmPendingJoin`).
     @Published var pendingInvite: PendingInvite?
 
+    /// The partner's IANA timezone as reported by THEIR device via the space
+    /// doc. Independent of location sharing.
+    @Published var partnerDeviceTimeZoneId: String?
+
+    /// The partner's zone, best source first.
+    ///
+    /// Their device's own `TimeZone.current` beats anything derived from a
+    /// location fix: it is exact, it updates on every sync, and it needs no
+    /// permission. The geocoded zone from their shared location is only a
+    /// fallback for the window before the first space-doc snapshot lands.
+    var partnerTimeZoneId: String? {
+        partnerDeviceTimeZoneId ?? locationService.partnerLocation?.timeZoneId
+    }
+
+    /// Convenience for views that want a resolved zone or nothing.
+    var partnerTimeZone: TimeZone? {
+        partnerTimeZoneId.flatMap(TimeZone.init(identifier:))
+    }
+
     /// Mirrors `cloud.fatalSyncError` so RootView — which observes this object,
     /// not the nested service — can raise comp E8.
     @Published var fatalSyncError: String?
@@ -366,6 +385,7 @@ final class AppViewModel: ObservableObject {
             partnerLeftName = goneName
             return
         }
+        if let zone = changes.partnerTimeZoneId { partnerDeviceTimeZoneId = zone }
         if let name = changes.partnerJoinedName {
             coupleSpaceService.updatePartnerName(name)
             wireIdentities()   // partner may have just been created — rewire ids

@@ -339,7 +339,7 @@ struct AddReminderView: View {
 
     private var timezoneHint: String? {
         vm.timezoneHint(partnerName: app.partner?.displayName ?? "",
-                        partnerTimeZoneId: location.partnerLocation?.timeZoneId,
+                        partnerTimeZoneId: app.partnerTimeZoneId,
                         partnerCity: location.partnerLocation?.cityLabel)
     }
 

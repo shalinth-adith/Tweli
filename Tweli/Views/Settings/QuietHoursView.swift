@@ -33,7 +33,7 @@ struct QuietHoursView: View {
 
     private var partnerName: String { app.partner?.displayName ?? "Your partner" }
     private var partnerZone: TimeZone? {
-        location.partnerLocation?.timeZoneId.flatMap(TimeZone.init(identifier:))
+        app.partnerTimeZone
     }
 
     var body: some View {
@@ -125,7 +125,9 @@ struct QuietHoursView: View {
     /// know where she is.
     private var windowLabel: String {
         guard partnerZone != nil else {
-            return "Set once \(partnerName) shares their location"
+            // Their device publishes its zone on every sync, so this only shows
+            // in the gap before their first sync lands.
+            return "Set once \(partnerName)'s phone checks in"
         }
         return "\(hourLabel(Self.quietStartHour)) – \(hourLabel(Self.quietEndHour)) their time"
     }
@@ -237,7 +239,7 @@ struct QuietHoursView: View {
 
     private var emptyNote: some View {
         Text(partnerZone == nil
-             ? "Once \(partnerName) shares their location, anything you send overnight will land without a sound."
+             ? "Once \(partnerName)'s phone checks in, anything you send overnight will land without a sound."
              : "Nothing has landed in their night recently.")
             .font(.system(size: 13.5))
             .lineSpacing(3)

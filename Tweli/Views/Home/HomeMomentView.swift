@@ -25,12 +25,14 @@ struct HomeMomentView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // "It's 11:04 PM in Abu Dhabi — Anaya is probably asleep." Renders
-            // nothing until the partner has shared a location with a time zone.
+            // "It's 11:04 PM in Abu Dhabi — Anaya is probably asleep." The zone
+            // comes from their device via the space doc, so this works without
+            // either of you sharing a location; the city name is the only part
+            // that needs one, and the sentence drops it when it's unknown.
             if let partner = app.partner {
                 PartnerLocalTimeBanner(partnerName: partner.displayName,
                                        cityLabel: location.partnerLocation?.cityLabel,
-                                       timeZoneId: location.partnerLocation?.timeZoneId)
+                                       timeZoneId: app.partnerTimeZoneId)
             }
             moodMoment
             ClosenessStripView(distanceLabel: location.distanceApartLabel,
