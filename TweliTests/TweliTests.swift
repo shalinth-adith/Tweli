@@ -47,6 +47,24 @@ struct TweliTests {
         #expect(!FirebaseService.isPlausiblePairCode("TWNK"))
     }
 
+    // 0 — ERROR: "Custom" repeat is not a recurrence. It must stay out of the
+    // picker (it would schedule a one-time alert under a repeating label) while
+    // remaining decodable, since reminders synced before it was hidden still
+    // carry the value.
+    @Test("error: Custom repeat is hidden from the picker but still decodes")
+    func customRepeatIsHiddenButWireCompatible() throws {
+        let offered = RepeatType.allCases.filter { $0 != .custom }
+        #expect(!offered.contains(.custom))
+        // The three real recurrences stay on offer alongside None.
+        #expect(offered == [.none, .daily, .weekly, .monthly])
+
+        // Back-compat: a reminder already stored as "custom" still round-trips.
+        let raw = #"{"repeatType":"custom"}"#
+        struct Probe: Codable { var repeatType: RepeatType }
+        let decoded = try JSONDecoder().decode(Probe.self, from: Data(raw.utf8))
+        #expect(decoded.repeatType == .custom)
+    }
+
     // 1a — ERROR: a minted code must always be normalizable back to itself.
     // Guards the alphabet and the generator from drifting apart.
     @Test("error: every minted pair code round-trips through normalize/format")

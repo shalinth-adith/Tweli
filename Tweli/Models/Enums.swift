@@ -34,7 +34,11 @@ enum ReminderAssignee: String, Codable, CaseIterable, Identifiable {
 // MARK: - Repeat
 
 enum RepeatType: String, Codable, CaseIterable, Identifiable {
-    case none, daily, weekly, monthly, custom
+    case none, daily, weekly, monthly
+    /// Not yet a recurrence — treated as one-time and hidden from the picker.
+    /// Kept in the enum for wire-format/back-compat so reminders already synced
+    /// with this value still decode; see `ReminderNotificationService.schedule`.
+    case custom
     var id: String { rawValue }
 
     var label: String {

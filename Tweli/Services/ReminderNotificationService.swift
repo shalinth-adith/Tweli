@@ -92,7 +92,13 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
         let d = reminder.reminderDate
         let comps: DateComponents
         switch reminder.repeatType {
-        case .none, .custom:
+        case .none:
+            comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: d)
+        case .custom:
+            // Treated as one-time until a custom-recurrence UI exists. The
+            // picker no longer offers this, so it is only reached by reminders
+            // synced before that change — they keep firing once, as they always
+            // did, rather than silently changing behaviour under the user.
             comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: d)
         case .daily:
             comps = cal.dateComponents([.hour, .minute], from: d)

@@ -238,7 +238,11 @@ struct AddReminderView: View {
             Rectangle().fill(Color.twSeparator).frame(height: 1)
             row("Repeat") {
                 Picker("", selection: $vm.repeatType) {
-                    ForEach(RepeatType.allCases) { Text($0.label).tag($0) }
+                    // `.custom` is excluded: it has no recurrence behaviour yet
+                    // and would schedule a one-time alert under a repeating label.
+                    ForEach(RepeatType.allCases.filter { $0 != .custom }) {
+                        Text($0.label).tag($0)
+                    }
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
