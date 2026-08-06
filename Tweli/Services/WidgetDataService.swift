@@ -51,4 +51,12 @@ final class WidgetDataService: ObservableObject {
             WidgetCenter.shared.reloadAllTimelines()
         }
     }
+
+    /// Removes the shared payload entirely — used on account deletion, so a
+    /// deleted account's last mood doesn't keep sitting on the Home Screen.
+    /// The widget then falls back to its own empty placeholder.
+    func clear() {
+        UserDefaults(suiteName: Self.appGroupId)?.removeObject(forKey: Self.snapshotKey)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
 }

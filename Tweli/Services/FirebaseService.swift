@@ -713,6 +713,74 @@ final class FirebaseService: ObservableObject {
         }
     }
 
+    // MARK: - Account deletion
+
+    /// The deployed `deleteAccount` HTTP function. Region must match
+    /// `setGlobalOptions({ region })` in functions/index.js.
+    private var deleteAccountURL: URL? {
+        guard let projectId = FirebaseApp.app()?.options.projectID else { return nil }
+        return URL(string: "https://asia-south1-\(projectId).cloudfunctions.net/deleteAccount")
+    }
+
+    /// Apple requires the Sign in with Apple token to be revoked when an account
+    /// is deleted. Firebase does the exchange given a fresh authorization code.
+    func revokeAppleToken(authorizationCode: String) async throws {
+        guard !isDevOrOffline else { return }
+        try await Auth.auth().revokeToken(withAuthorizationCode: authorizationCode)
+        log("revoked Apple token")
+    }
+
+    /// Permanently destroys the account server-side: everything this user
+    /// authored, their membership, their invite codes, and the Auth user itself.
+    ///
+    /// Deliberately server-side — Firestore has no recursive client delete, and
+    /// admin `deleteUser` needs no recent login. See functions/index.js.
+    func deleteAccount() async throws {
+        guard !isDevOrOffline else {
+            // A dev session has nothing on the server to remove.
+            reset()
+            return
+        }
+        guard let url = deleteAccountURL else { throw AccountDeletionError.notConfigured }
+        guard let user = Auth.auth().currentUser else { throw AccountDeletionError.notSignedIn }
+
+        let idToken = try await user.getIDToken()
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data("{}".utf8)
+        request.timeoutInterval = 60
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            log("deleteAccount HTTP \(status): \(body)")
+            throw AccountDeletionError.server(status)
+        }
+        log("account deleted server-side")
+
+        // The Auth user is gone; drop the local session so nothing retries with
+        // a token for a user that no longer exists.
+        try? signOut()
+        reset()
+    }
+
+    enum AccountDeletionError: LocalizedError {
+        case notConfigured, notSignedIn, server(Int)
+        var errorDescription: String? {
+            switch self {
+            case .notConfigured:
+                return "Account deletion isn't available in this build."
+            case .notSignedIn:
+                return "You're not signed in."
+            case .server:
+                return "We couldn't delete your account just now. Please check your connection and try again."
+            }
+        }
+    }
+
     func reset() {
         stopListening()
         setRole(.none)

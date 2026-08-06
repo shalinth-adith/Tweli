@@ -12,6 +12,7 @@
 
 import SwiftUI
 import UserNotifications
+import AuthenticationServices
 
 struct SettingsView: View {
     @EnvironmentObject private var app: AppViewModel
@@ -27,6 +28,9 @@ struct SettingsView: View {
     @State private var editingProfile = false
     @State private var confirmLeave = false
     @State private var showQuietHours = false
+    @State private var confirmDelete = false
+    @State private var deleting = false
+    @State private var deleteError: String?
 
     var body: some View {
         ScrollView {
@@ -98,6 +102,51 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 14)
 
+                // Deletion is not "leave, but more" — it is permanent and it is
+                // separate, so it gets its own block and its own warning.
+                group {
+                    Button { confirmDelete = true } label: {
+                        HStack(spacing: 12) {
+                            if deleting {
+                                ProgressView().frame(width: 24)
+                            } else {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(Color.twDanger)
+                                    .frame(width: 24)
+                            }
+                            Text(deleting ? "Deleting…" : "Delete my account")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Color.twDanger)
+                            Spacer()
+                        }
+                        .padding(.vertical, 14)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(deleting)
+                }
+                .padding(.top, 26)
+
+                Text("Permanent. Everything you wrote is erased from our servers and can't be recovered.")
+                    .font(.system(size: 12))
+                    .lineSpacing(2)
+                    .foregroundStyle(Color.twInkQuaternary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 14)
+
+                if let deleteError {
+                    Text(deleteError)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(Color.twDangerInk)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 8)
+                        .padding(.top, 10)
+                }
+
                 Button("Sign out") {
                     app.leaveSpace()
                     auth.signOut()
@@ -130,6 +179,42 @@ struct SettingsView: View {
             Button("Stay", role: .cancel) { }
         } message: {
             Text("Your letters are kept safe for 30 days. You can invite your partner back anytime.")
+        }
+        .confirmationDialog("Delete your account permanently?",
+                            isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete permanently", role: .destructive) { deleteAccount() }
+            Button("Keep my account", role: .cancel) { }
+        } message: {
+            Text(deleteWarning)
+        }
+    }
+
+    /// Says exactly what goes and what survives, because the answer depends on
+    /// whether anyone else is still in the space.
+    private var deleteWarning: String {
+        let mine = "Your moods, letters, reminders, dates and location will be permanently erased from our servers. This can't be undone."
+        guard let partner = couple.partner?.displayName, !partner.isEmpty else {
+            return mine + " Your shared space will be deleted too."
+        }
+        return mine + " \(partner) keeps what they wrote, and will be told you've left."
+    }
+
+    private func deleteAccount() {
+        deleteError = nil
+        deleting = true
+        Task {
+            do {
+                try await app.deleteAccountPermanently()
+                // RootView drops back to the entry screen on its own once the
+                // signed-in flag clears; nothing to dismiss here.
+            } catch is CancellationError {
+                deleteError = nil
+            } catch {
+                // A cancelled Apple sheet is a decision, not a failure.
+                let cancelled = (error as? ASAuthorizationError)?.code == .canceled
+                deleteError = cancelled ? nil : error.localizedDescription
+            }
+            deleting = false
         }
     }
 

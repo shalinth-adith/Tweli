@@ -180,6 +180,9 @@ final class AppViewModel: ObservableObject {
             return (user.uid, user.displayName)
         }
         auth.onSignOut = { [cloud] in try? cloud.signOut() }
+        auth.revokeAppleToken = { [cloud] code in
+            try await cloud.revokeAppleToken(authorizationCode: code)
+        }
 
         // When the user signs in, apply their real name + re-wire ids. A DEBUG dev
         // sign-in additionally puts FirebaseService into its offline `dev-` state.
@@ -358,6 +361,48 @@ final class AppViewModel: ObservableObject {
         cloud.clearFatalSyncError()
         listeningSpaceId = nil      // force startListening to re-bind
         syncNow()
+    }
+
+    // MARK: - Account deletion
+
+    /// Permanently deletes the account: re-authenticate with Apple (which both
+    /// proves intent and yields the fresh code Apple's token revocation needs),
+    /// destroy everything server-side, then erase every local trace.
+    ///
+    /// Throws so the caller can show why it failed. Nothing local is cleared
+    /// unless the server confirmed the deletion — a half-wiped device that is
+    /// still a live account is the worst outcome here.
+    func deleteAccountPermanently() async throws {
+        try await auth.reauthenticateAndRevokeAppleToken()
+        try await cloud.deleteAccount()
+        wipeLocalState()
+        auth.forgetLocalIdentity()
+    }
+
+    /// Erases everything this app persisted on-device, including the App Group
+    /// payload the widget reads — otherwise a deleted account's last mood keeps
+    /// sitting on the Home Screen.
+    private func wipeLocalState() {
+        notifications.removeAllPending()
+        coupleSpaceService.disconnect()
+        listeningSpaceId = nil
+        partnerLeftName = nil
+        partnerDeviceTimeZoneId = nil
+        freshMood = nil
+        pendingInvite = nil
+        pendingJoinCode = nil
+
+        let defaults = UserDefaults.standard
+        for key in [
+            "tweli.aboutYouDone", "tweli.auth.appleUserId", "tweli.auth.displayName",
+            "tweli.coupleSpace", "tweli.currentUser", "tweli.fb.pairCode",
+            "tweli.fb.pairCodeExpiry", "tweli.fb.role", "tweli.fb.spaceId",
+            "tweli.mood.collapsedToStrip", "tweli.mood.lastSeenPartner",
+            "tweli.partner", "tweli.roomSetupComplete", "tweli.theme",
+        ] {
+            defaults.removeObject(forKey: key)
+        }
+        widget.clear()
     }
 
     /// E6 → "Send a new invite": stay signed in, drop the dead space, and land

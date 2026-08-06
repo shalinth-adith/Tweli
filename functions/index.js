@@ -14,10 +14,12 @@
 //
 
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onRequest } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+const { getAuth } = require("firebase-admin/auth");
 
 initializeApp();
 // Collocate with the Firestore database (asia-south1 / Mumbai) so the trigger
@@ -235,3 +237,128 @@ function buildNotification(type, afterData, beforeData, isCreate) {
       return null;
   }
 }
+
+
+// ---------------------------------------------------------------------------
+// Permanent account deletion (App Store guideline 5.1.1(v)).
+//
+// Runs server-side for two reasons the client cannot work around:
+//   1. Firestore has no recursive delete from a client SDK, and the rules that
+//      (correctly) stop you touching a space you have left also stop you
+//      cleaning up on the way out.
+//   2. Admin `deleteUser` has no "recent login" requirement, so a user whose
+//      last sign-in was weeks ago can still delete without a re-auth dance.
+//
+// What it removes, per the product decision: everything the caller AUTHORED.
+// A partner's own letters and reminders survive, and they are told via the
+// same `leftBy` marker that drives the "left the space" screen. If the caller
+// was alone in the space, the space and all of its contents go too.
+//
+// Called over plain HTTPS with a Firebase ID token, so the app needs no
+// Functions client SDK:
+//   POST https://asia-south1-<project>.cloudfunctions.net/deleteAccount
+//   Authorization: Bearer <idToken>
+// ---------------------------------------------------------------------------
+
+const ITEM_TYPES = [
+  "reminders", "countdowns", "letters",
+  "virtualDates", "moods", "pings", "locations",
+];
+
+/** Deletes every doc a query matches, in batches (Firestore caps at 500/batch). */
+async function deleteQueryInBatches(db, query) {
+  let removed = 0;
+  for (;;) {
+    const snap = await query.limit(400).get();
+    if (snap.empty) return removed;
+    const batch = db.batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    removed += snap.size;
+    if (snap.size < 400) return removed;
+  }
+}
+
+exports.deleteAccount = onRequest(async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Use POST." });
+    return;
+  }
+
+  // --- Authenticate. The uid comes from a verified token, never from the body,
+  // so a caller can only ever delete themselves.
+  const header = req.get("Authorization") || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) {
+    res.status(401).json({ error: "Missing bearer token." });
+    return;
+  }
+
+  let uid;
+  try {
+    uid = (await getAuth().verifyIdToken(token)).uid;
+  } catch (err) {
+    console.error("deleteAccount: bad token:", err && err.message);
+    res.status(401).json({ error: "Invalid token." });
+    return;
+  }
+
+  const db = getFirestore();
+  const summary = { spacesTouched: 0, spacesDeleted: 0, itemsDeleted: 0, codesDeleted: 0 };
+
+  try {
+    // --- Every space this user belongs to (normally exactly one).
+    const spaces = await db
+      .collection("spaces")
+      .where("memberUids", "array-contains", uid)
+      .get();
+
+    for (const spaceDoc of spaces.docs) {
+      summary.spacesTouched += 1;
+      const members = (spaceDoc.data().memberUids || []).filter((u) => u !== uid);
+      const alone = members.length === 0;
+
+      for (const type of ITEM_TYPES) {
+        const col = spaceDoc.ref.collection(type);
+        // Alone: the space dies with them, so take everything. Otherwise take
+        // only what this user wrote and leave the partner's records intact.
+        const query = alone ? col : col.where("authorUid", "==", uid);
+        summary.itemsDeleted += await deleteQueryInBatches(db, query);
+      }
+
+      if (alone) {
+        await spaceDoc.ref.delete();
+        summary.spacesDeleted += 1;
+      } else {
+        // Same shape the client's "leave" writes, so the remaining partner's
+        // listener raises the "left the space" screen rather than silently
+        // finding themselves alone.
+        await spaceDoc.ref.update({
+          memberUids: FieldValue.arrayRemove(uid),
+          [`memberNames.${uid}`]: FieldValue.delete(),
+          [`fcmTokens.${uid}`]: FieldValue.delete(),
+          [`memberTimezones.${uid}`]: FieldValue.delete(),
+          leftBy: uid,
+          leftAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    // --- Any invite codes they minted, so a stale code can't resurrect them.
+    summary.codesDeleted += await deleteQueryInBatches(
+      db,
+      db.collection("pairCodes").where("createdBy", "==", uid)
+    );
+
+    // --- The account itself. Last, so a failure above leaves a user who can
+    // still sign in and retry rather than an orphaned pile of data.
+    await getAuth().deleteUser(uid);
+
+    console.log(`deleteAccount: ${uid} removed`, summary);
+    res.status(200).json({ ok: true, ...summary });
+  } catch (err) {
+    console.error("deleteAccount failed for", uid, err && err.message);
+    res.status(500).json({ error: "Deletion failed. Nothing was partially removed from your account record." });
+  }
+});
