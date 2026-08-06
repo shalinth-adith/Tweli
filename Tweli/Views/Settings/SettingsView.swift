@@ -127,11 +127,6 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 14)
 
-                Button("Sign out") { app.signOut() }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.twInkTertiary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, 18)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 40)

@@ -139,21 +139,37 @@ struct AboutYouView: View {
     private var topBar: some View {
         HStack {
             if isEditing {
-                Button("Cancel") { dismiss() }
-                    .font(.system(size: 15)).foregroundStyle(Color.twInkSecondary)
-                    .frame(width: 60, height: 34, alignment: .leading)
+                // A circular chevron, matching every other back affordance in
+                // the app. The old text "Cancel" was clamped to 60pt, so it
+                // truncated to "Ca…" and iOS wrapped the stub in a glass pill.
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.twInk)
+                        .frame(width: 34, height: 34)
+                        .background(Color.twInkTertiary.opacity(0.22), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Cancel")
+                .frame(width: 60, alignment: .leading)
             } else {
                 Color.clear.frame(width: 60, height: 34)
             }
             Spacer()
             if isEditing {
-                Text("Edit profile").font(.system(size: 16, weight: .semibold))
+                Text("Edit profile")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.twInk)
             }
             Spacer()
             if !isEditing {
-                Button("Skip") { save(); app.finishAboutYou() }
-                    .font(.system(size: 15)).foregroundStyle(Color.twInkSecondary)
-                    .frame(width: 60, height: 34, alignment: .trailing)
+                Button { save(); app.finishAboutYou() } label: {
+                    Text("Skip")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.twInkSecondary)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 60, height: 34, alignment: .trailing)
             } else {
                 Color.clear.frame(width: 60, height: 34)
             }

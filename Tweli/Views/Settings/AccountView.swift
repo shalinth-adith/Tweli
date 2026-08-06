@@ -6,6 +6,9 @@
 //  only screen in the app whose job is to offer you something smaller than the
 //  thing you came here to do.
 //
+//  Sign out lives here too — it is the softest exit of all (leave the device,
+//  keep everything), and it used to sit unlabelled at the bottom of Our space.
+//
 //  Two departures from the comp, both because a button that does nothing is
 //  worse than no button:
 //   · "Take a break" and "Mute everything for a while" are not built, so they
@@ -44,6 +47,16 @@ struct AccountView: View {
                 sectionLabel("Keepsake")
                 group {
                     exportRow
+                }
+
+                sectionLabel("This device")
+                group {
+                    Button { app.signOut() } label: {
+                        row(title: "Sign out",
+                            subtitle: "Leave this device — nothing is deleted",
+                            tint: .twInk)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 sectionLabel("Permanent")
