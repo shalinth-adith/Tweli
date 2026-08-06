@@ -47,6 +47,54 @@ struct TweliTests {
         #expect(!FirebaseService.isPlausiblePairCode("TWNK"))
     }
 
+    // -1 — ERROR: the New Reminder sheet's validation must be REACHABLE. The
+    // title error only fires on an empty title, so if Save were disabled under
+    // that same condition the message could never appear and the user would get
+    // a dim button with no explanation.
+    @Test("error: an empty title is savable-and-rejected, not silently blocked")
+    func emptyTitleValidationIsReachable() {
+        let vm = AddReminderViewModel()
+        vm.title = "   "                       // whitespace only
+
+        // Nothing said before the user asks.
+        #expect(vm.titleError == nil)
+        // Save is dim…
+        #expect(!vm.canSave)
+        // …but attempting it must produce the explanation, not silence.
+        #expect(vm.validate() == false)
+        #expect(vm.titleError != nil)
+
+        // And it clears the moment they start typing.
+        vm.title = "Call her"
+        vm.clearAttempt()
+        #expect(vm.titleError == nil)
+        #expect(vm.canSave)
+        #expect(vm.validate())
+    }
+
+    // -2 — ERROR: a one-off reminder in the past is rejected; a repeating one at
+    // a time-of-day that has already gone by today is NOT — it belongs tomorrow.
+    @Test("error: past-time validation applies to one-offs, not recurrences")
+    func pastTimeOnlyBlocksOneOffs() {
+        func vm(_ repeatType: RepeatType) -> AddReminderViewModel {
+            let m = AddReminderViewModel()
+            m.title = "Vitamins"
+            m.date = Date().addingTimeInterval(-3600)
+            m.time = Date().addingTimeInterval(-3600)
+            m.repeatType = repeatType
+            return m
+        }
+        let once = vm(.none)
+        #expect(once.validate() == false)
+        #expect(once.timeError != nil)
+
+        for r in [RepeatType.daily, .weekly, .monthly] {
+            let recurring = vm(r)
+            #expect(recurring.validate(), "\(r.label) at a past time-of-day should schedule for next occurrence")
+            #expect(recurring.timeError == nil)
+        }
+    }
+
     // 0 — ERROR: "Custom" repeat is not a recurrence. It must stay out of the
     // picker (it would schedule a one-time alert under a repeating label) while
     // remaining decodable, since reminders synced before it was hidden still

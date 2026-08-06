@@ -147,10 +147,7 @@ struct SettingsView: View {
                         .padding(.top, 10)
                 }
 
-                Button("Sign out") {
-                    app.leaveSpace()
-                    auth.signOut()
-                }
+                Button("Sign out") { app.signOut() }
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.twInkTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -311,9 +308,11 @@ struct SettingsView: View {
     /// Three numbers — but only the ones we genuinely have.
     private var stats: [Stat] {
         var out: [Stat] = []
-        if let km = location.distanceApartLabel {
-            out.append(Stat(value: km.replacingOccurrences(of: " km", with: ""),
-                            label: "km apart", tint: .twInfo))
+        if let distance = location.distanceApartLabel {
+            // Keep the formatter's own unit — it yields miles in US locales, so
+            // splitting " km" off and labelling the tile "km apart" printed the
+            // wrong unit and left the number unstripped.
+            out.append(Stat(value: distance, label: "apart", tint: .twInfo))
         }
         if let days = daysTogether {
             out.append(Stat(value: "\(days)", label: "days together", tint: .twAccentInk))

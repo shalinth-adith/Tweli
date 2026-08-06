@@ -26,6 +26,10 @@ struct AddReminderView: View {
     /// Comp R4 — the save didn't reach the server. The sheet stays open and the
     /// reminder is already on disk, so nothing is lost.
     @State private var savedAsDraft = false
+    /// What we actually wrote. Retry must re-push THIS, not build a new one —
+    /// `build()` mints a fresh id, so re-saving duplicated the reminder (and its
+    /// notification) on every tap.
+    @State private var savedReminder: ReminderItem?
 
     @FocusState private var titleFocused: Bool
 
@@ -113,7 +117,9 @@ struct AddReminderView: View {
                             radius: 9, y: 4)
             }
             .buttonStyle(PressableButtonStyle())
-            .disabled(!vm.canSave)
+            // Deliberately NOT .disabled: Save is dim until the sheet earns it
+            // (comp R1), but it stays tappable so tapping it can explain why
+            // (comp R2). Disabling it made "Give it a name" unreachable.
         }
         .padding(.horizontal, 18)
         .padding(.top, 10)
@@ -398,12 +404,18 @@ struct AddReminderView: View {
         guard vm.validate() else { return }
         guard let spaceId = app.coupleSpaceService.coupleSpace?.id else { return }
 
-        let reminder = vm.build(createdBy: app.currentUser.id, coupleSpaceId: spaceId)
         // `add` writes to the local store (and schedules the alert) immediately,
-        // then pushes to Firestore. Firestore's offline cache queues the write,
-        // so an offline save is genuinely a draft that sends itself — nothing to
-        // retry manually, but the sheet says so rather than pretending it synced.
-        service.add(reminder)
+        // then pushes to Firestore, whose offline cache queues the write. So an
+        // offline save really is a draft that sends itself.
+        if let existing = savedReminder {
+            // Retry after an offline save: re-push the SAME record. Adding again
+            // would create a duplicate reminder and a duplicate alert.
+            service.update(existing)
+        } else {
+            let reminder = vm.build(createdBy: app.currentUser.id, coupleSpaceId: spaceId)
+            service.add(reminder)
+            savedReminder = reminder
+        }
 
         if app.cloud.accountAvailable {
             dismiss()

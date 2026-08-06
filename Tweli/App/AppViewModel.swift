@@ -356,6 +356,20 @@ final class AppViewModel: ObservableObject {
         }
     }
 
+    /// Sign out WITHOUT leaving the shared space.
+    ///
+    /// `leaveSpace()` announces a departure so the partner sees the "left the
+    /// space" screen. Signing out must not: nothing has happened to them, and
+    /// your membership has to survive so you can sign back in. Local couple
+    /// state is still cleared so a different account can't inherit it.
+    func signOut() {
+        coupleSpaceService.disconnect()
+        cloud.reset()
+        listeningSpaceId = nil
+        partnerLeftName = nil
+        auth.signOut()
+    }
+
     /// Comp E8 "Try again" — drop the failure and re-attach the listeners.
     func retryAfterFatalError() {
         cloud.clearFatalSyncError()
