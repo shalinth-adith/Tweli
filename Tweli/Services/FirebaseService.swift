@@ -283,6 +283,39 @@ final class FirebaseService: ObservableObject {
         return n == codeLength || n == 6
     }
 
+    // MARK: - Notification preferences (comp V3)
+
+    /// Load my own preferences from the space doc. Falls back to the defaults,
+    /// which match the behaviour that was previously hard-coded server-side.
+    func loadNotificationPreferences() async -> NotificationPreferences {
+        guard !isDevOrOffline, let spaceId, let uid = currentUid else { return .default }
+        do {
+            let snap = try await db.collection("spaces").document(spaceId).getDocument()
+            guard let all = snap.data()?["notificationPrefs"] as? [String: Any],
+                  let mine = all[uid] as? [String: Any] else { return .default }
+            return NotificationPreferences(firestore: mine)
+        } catch {
+            log("loadNotificationPreferences failed: \(error.localizedDescription)")
+            return .default
+        }
+    }
+
+    /// Persist my preferences where the push function can read them. Writing to
+    /// `notificationPrefs.<uid>` keeps it a member edit, so the existing rule
+    /// covers it without a rules change.
+    func saveNotificationPreferences(_ prefs: NotificationPreferences) async {
+        guard !isDevOrOffline, let spaceId, let uid = currentUid else { return }
+        do {
+            try await db.collection("spaces").document(spaceId).updateData([
+                FieldPath(["notificationPrefs", uid]): prefs.firestoreValue,
+                "updatedAt": FieldValue.serverTimestamp()
+            ])
+            log("saved notification preferences")
+        } catch {
+            log("saveNotificationPreferences failed: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Space recovery
 
     /// What a recovered space carries back to the client.
@@ -795,7 +828,11 @@ final class FirebaseService: ObservableObject {
     ///
     /// Deliberately server-side — Firestore has no recursive client delete, and
     /// admin `deleteUser` needs no recent login. See functions/index.js.
-    func deleteAccount() async throws {
+    /// - Parameter keepLetters: comp W3's "Deliver my sealed letters first".
+    ///   When true, letters you wrote are unsealed and EXEMPTED from deletion so
+    ///   they stay your partner's to keep. Default false, which preserves the
+    ///   shipped behaviour of removing everything you authored.
+    func deleteAccount(keepLetters: Bool = false) async throws {
         guard !isDevOrOffline else {
             // A dev session has nothing on the server to remove.
             reset()
@@ -809,7 +846,7 @@ final class FirebaseService: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = Data("{}".utf8)
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["keepLetters": keepLetters])
         request.timeoutInterval = 60
 
         let (data, response) = try await URLSession.shared.data(for: request)

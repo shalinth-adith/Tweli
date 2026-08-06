@@ -410,9 +410,11 @@ final class AppViewModel: ObservableObject {
     /// Throws so the caller can show why it failed. Nothing local is cleared
     /// unless the server confirmed the deletion — a half-wiped device that is
     /// still a live account is the worst outcome here.
-    func deleteAccountPermanently() async throws {
+    /// - Parameter keepLetters: comp W3's toggle — leave the letters you wrote
+    ///   with your partner instead of erasing them along with everything else.
+    func deleteAccountPermanently(keepLetters: Bool = false) async throws {
         try await auth.reauthenticateAndRevokeAppleToken()
-        try await cloud.deleteAccount()
+        try await cloud.deleteAccount(keepLetters: keepLetters)
         wipeLocalState()
         auth.forgetLocalIdentity()
     }

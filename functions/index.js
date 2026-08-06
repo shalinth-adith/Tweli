@@ -81,8 +81,18 @@ exports.notifyPartnerOnItemWrite = onDocumentWritten(
     // banner still lands on their lock screen, but with no sound and a "passive"
     // interruption level so it never buzzes or wakes the screen. They see it when
     // they wake. Requires memberTimezones[recipientUid]; without it we assume day.
+    // Comp V3: the recipient's own switches decide whether this type is sent at
+    // all, and their own quiet window replaces the constants below. Absent prefs
+    // fall back to those constants, so anyone who never opened the screen keeps
+    // exactly the behaviour they had.
+    const prefs = ((space.notificationPrefs || {})[recipientUid]) || {};
+    if (!wantsType(prefs, type)) {
+      console.log(`push skipped by preference: ${type} -> ${recipientUid}`);
+      return;
+    }
+
     const recipientTz = (space.memberTimezones || {})[recipientUid];
-    const quiet = isQuietHour(recipientTz);
+    const quiet = isQuietHour(recipientTz, prefs);
 
     const aps = quiet
       ? { "mutable-content": 1, "interruption-level": "passive" } // no sound key
@@ -129,10 +139,32 @@ exports.notifyPartnerOnItemWrite = onDocumentWritten(
 const QUIET_START = 22; // 10pm
 const QUIET_END = 8; //  8am
 
-function isQuietHour(tzId) {
+function isQuietHour(tzId, prefs) {
   const h = localHour(tzId);
   if (h === null) return false;
-  return h >= QUIET_START || h < QUIET_END;
+  const start = Number.isInteger(prefs && prefs.quietStart) ? prefs.quietStart : QUIET_START;
+  const end = Number.isInteger(prefs && prefs.quietEnd) ? prefs.quietEnd : QUIET_END;
+  if (start === end) return false;                       // empty window
+  return start > end ? (h >= start || h < end)           // crosses midnight
+    : (h >= start && h < end);
+}
+
+// Maps a Firestore subcollection to the V3 switch that governs it. An unknown
+// type is allowed through: silence should be something the user chose, never a
+// side effect of adding a new item type and forgetting to map it.
+const TYPE_SWITCH = {
+  moods: "moods",
+  letters: "letters",
+  reminders: "reminders",
+  countdowns: "countdownMilestones",
+  pings: "moods",            // a nudge is the same "from her" channel as a mood
+  virtualDates: "reminders",  // a planned date is a Tweli nudge, not her voice
+};
+
+function wantsType(prefs, type) {
+  const key = TYPE_SWITCH[type];
+  if (!key) return true;
+  return prefs[key] !== false;   // default ON when unset
 }
 
 /** Current hour (0–23) in the given IANA timezone, or null if unresolved. */
@@ -279,6 +311,37 @@ async function deleteQueryInBatches(db, query) {
   }
 }
 
+/**
+ * Unseals every letter this user wrote so their partner can read them, and
+ * leaves them in place. Rewrites the stored payload's unlockDate to now — the
+ * client decides "sealed" purely from that field, so clearing it is what
+ * actually delivers the letter.
+ */
+async function unsealLettersBy(db, collection, uid) {
+  const snap = await collection.where("authorUid", "==", uid).get();
+  if (snap.empty) return 0;
+
+  const batch = db.batch();
+  let count = 0;
+  const nowIso = new Date().toISOString();
+  snap.docs.forEach((doc) => {
+    let payload;
+    try {
+      payload = JSON.parse(doc.data().payload || "{}");
+    } catch {
+      return;                       // unreadable payload — leave it untouched
+    }
+    // Only sealed letters need changing; already-open ones simply stay.
+    if (payload.unlockDate) {
+      payload.unlockDate = nowIso;
+      batch.update(doc.ref, { payload: JSON.stringify(payload) });
+    }
+    count += 1;
+  });
+  await batch.commit();
+  return count;
+}
+
 exports.deleteAccount = onRequest(async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Use POST." });
@@ -303,8 +366,16 @@ exports.deleteAccount = onRequest(async (req, res) => {
     return;
   }
 
+  // Comp W3 "Deliver my sealed letters first": unseal the letters this user
+  // wrote and leave them with their partner instead of erasing them. Opt-in —
+  // the default remains "everything you authored goes".
+  const keepLetters = !!(req.body && req.body.keepLetters);
+
   const db = getFirestore();
-  const summary = { spacesTouched: 0, spacesDeleted: 0, itemsDeleted: 0, codesDeleted: 0 };
+  const summary = {
+    spacesTouched: 0, spacesDeleted: 0, itemsDeleted: 0,
+    codesDeleted: 0, lettersLeftBehind: 0,
+  };
 
   try {
     // --- Every space this user belongs to (normally exactly one).
@@ -320,6 +391,15 @@ exports.deleteAccount = onRequest(async (req, res) => {
 
       for (const type of ITEM_TYPES) {
         const col = spaceDoc.ref.collection(type);
+
+        // Letters are the one thing a user can choose to leave behind — but
+        // only when someone is still there to receive them. Alone in the space,
+        // there is no one to keep them and they go with everything else.
+        if (type === "letters" && keepLetters && !alone) {
+          summary.lettersLeftBehind += await unsealLettersBy(db, col, uid);
+          continue;
+        }
+
         // Alone: the space dies with them, so take everything. Otherwise take
         // only what this user wrote and leave the partner's records intact.
         const query = alone ? col : col.where("authorUid", "==", uid);
