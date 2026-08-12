@@ -16,6 +16,27 @@ final class AppViewModel: ObservableObject {
     // MARK: - App-level UI state
     @Published var showSplash: Bool = true
 
+    /// Comp 0Z — the three-page entry tutorial. True only on a fresh install.
+    ///
+    /// The gate is read HERE and nowhere else: a property initializer runs once,
+    /// when AppViewModel is constructed, which is once per launch. Reading it on
+    /// access instead (a computed property, or a re-read in `body`) would let the
+    /// tutorial reappear mid-session the moment anything else wrote to
+    /// UserDefaults and invalidated a view.
+    ///
+    /// `private(set)` so the only way it can ever go false is `finishTutorial()`,
+    /// and nothing outside this type can set it back to true. That makes
+    /// "it shows once" a compile-time guarantee rather than a convention.
+    @Published private(set) var showTutorial: Bool = !TutorialGate().hasSeen
+
+    private let tutorialGate = TutorialGate()
+
+    /// Skip or finish — both mean "never show this again".
+    func finishTutorial() {
+        tutorialGate.markSeen()
+        withAnimation(.easeInOut(duration: 0.35)) { showTutorial = false }
+    }
+
     /// Set when the partner opens an invite link — drives the "confirm join" sheet.
     /// The share is only accepted once the user taps Join (see `confirmPendingJoin`).
     @Published var pendingInvite: PendingInvite?

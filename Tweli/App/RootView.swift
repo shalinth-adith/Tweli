@@ -35,6 +35,13 @@ struct RootView: View {
                 // space is half a thread now, and the tabs would be lying.
                 PartnerLeftView(partnerName: goneName)
                     .transition(.opacity)
+            } else if app.showTutorial {
+                // Comp 0Z. Ahead of sign-in on purpose: it is the only chance to
+                // say what Tweli is before asking for an identity — and the
+                // invited partner, who never went looking for this app, is the
+                // one who most needs to be told.
+                TutorialView { app.finishTutorial() }
+                    .transition(.opacity)
             } else if !auth.isSignedIn {
                 SignInView()
                     .transition(.opacity)

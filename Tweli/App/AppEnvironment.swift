@@ -34,6 +34,9 @@ enum AppEnvironment {
         let d = UserDefaults.standard
         d.set(true, forKey: "tweli.aboutYouDone")
         d.set(true, forKey: "tweli.roomSetupComplete")
+        // Comp 0Z sits between the splash and sign-in; without this a headless
+        // capture lands on page 1 of the tutorial instead of the tabs.
+        d.set(true, forKey: TutorialGate.key)
         if d.string(forKey: "tweli.auth.appleUserId") == nil {
             d.set("dev-\(UUID().uuidString)", forKey: "tweli.auth.appleUserId")
         }
