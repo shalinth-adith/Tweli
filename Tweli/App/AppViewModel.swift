@@ -149,6 +149,9 @@ final class AppViewModel: ObservableObject {
     /// Light / Dark / Auto — applied as a preferredColorScheme at the root, which
     /// is what makes the L and N palettes selectable (see DesignSystem.swift).
     let theme = ThemeService()
+    /// Arms an App Store rating ask at genuinely happy moments, fires it later
+    /// at a calm one. See ReviewPromptService for why those are separate.
+    let review = ReviewPromptService()
 
     let coupleSpaceService: CoupleSpaceService
     let reminderService: ReminderService
@@ -474,6 +477,9 @@ final class AppViewModel: ObservableObject {
         if let name = changes.partnerJoinedName {
             coupleSpaceService.updatePartnerName(name)
             wireIdentities()   // partner may have just been created — rewire ids
+            // This block runs on every sync, not only at the moment of pairing,
+            // so the one-shot check lives inside the service.
+            review.notePartnerPresent()
         }
         let dec = JSONDecoder()
         func decode<T: Decodable>(_ type: String) -> [T] {

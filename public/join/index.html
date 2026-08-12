@@ -3,7 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Join on Tweli</title>
+  <title>Your person invited you · Tweli</title>
+
+  <!--
+    Link preview. This page is shared into iMessage / WhatsApp / Instagram DMs,
+    so the unfurled card IS the first impression most people get of Tweli —
+    it is seen far more often than the App Store page. Absolute URLs required:
+    scrapers do not resolve relative paths.
+  -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tweli">
+  <meta property="og:title" content="Your person invited you">
+  <meta property="og:description" content="Join them on Tweli — one shared space for the two of you.">
+  <meta property="og:image" content="https://tweli-9a99e.web.app/og-invite.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:url" content="https://tweli-9a99e.web.app/join/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Your person invited you">
+  <meta name="twitter:description" content="Join them on Tweli — one shared space for the two of you.">
+  <meta name="twitter:image" content="https://tweli-9a99e.web.app/og-invite.png">
+  <meta name="description" content="Join them on Tweli — one shared space for the two of you.">
+  <meta name="theme-color" content="#0D0A16" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+
   <style>
     :root { color-scheme: light dark; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -14,34 +37,57 @@
       padding: 32px 24px;
       background: linear-gradient(170deg, #FFFFFF 0%, #F4F3FF 62%, #FFEFF2 100%);
       color: #000;
+      -webkit-tap-highlight-color: transparent;
+      /* Without this, a child wider than the viewport (the h1 on a small
+         iPhone) stretches the flex container and clips every centred row. */
+      width: 100%; overflow-x: hidden;
     }
+    body > * { max-width: 100%; }
     @media (prefers-color-scheme: dark) {
       body { background: linear-gradient(170deg,#16112A 0%,#0D0A16 60%,#160B12 100%); color: #fff; }
       .card { background: #1C1C1E !important; }
       .code { color: #fff !important; }
-      .muted { color: #98989F !important; }
+      .muted, .sub, .hint { color: #98989F !important; }
+      .ghost { color: #EDEDF2 !important; border-color: rgba(255,255,255,0.18) !important; }
     }
     .logo { width: 56px; height: 56px; margin-bottom: 24px; }
-    h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.6px; }
-    .sub { font-size: 16px; color: #8A8A8E; margin-top: 10px; max-width: 300px; line-height: 1.45; }
+    h1 { font-size: clamp(25px, 7.2vw, 30px); font-weight: 800; letter-spacing: -0.6px; line-height: 1.15; }
+    .sub { font-size: 16px; color: #8A8A8E; margin-top: 10px; max-width: min(300px, 100%); line-height: 1.45; }
     .muted { color: #8A8A8E; }
+
     .card {
       margin-top: 30px; background: #fff; border-radius: 18px;
       padding: 18px 26px; box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+      border: none; cursor: pointer; font: inherit; color: inherit;
+      transition: transform 0.12s ease;
     }
+    .card:active { transform: scale(0.97); }
     .label { font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #8A8A8E; }
     .code {
       font-family: ui-monospace, "SF Mono", monospace; font-size: 34px; font-weight: 800;
       letter-spacing: 4px; margin-top: 6px; color: #000;
     }
+    .copyhint { font-size: 11.5px; font-weight: 600; color: #8A8A8E; margin-top: 8px; letter-spacing: 0.3px; }
+
     .btn {
       display: inline-block; margin-top: 28px; text-decoration: none;
       font-size: 17px; font-weight: 700; color: #fff;
       padding: 16px 34px; border-radius: 17px;
       background: linear-gradient(135deg, #5E5CE6 0%, #FF2D55 100%);
       box-shadow: 0 10px 26px rgba(255,45,85,0.32);
+      transition: transform 0.12s ease;
     }
-    .hint { margin-top: 18px; font-size: 13px; color: #AEAEB2; max-width: 320px; line-height: 1.5; }
+    .btn:active { transform: scale(0.97); }
+
+    .ghost {
+      display: inline-block; margin-top: 14px; text-decoration: none;
+      font-size: 15px; font-weight: 600; color: #1C1C1E;
+      padding: 13px 26px; border-radius: 15px;
+      border: 1px solid rgba(0,0,0,0.14);
+    }
+
+    .hint { margin-top: 18px; font-size: 13px; color: #AEAEB2; max-width: min(320px, 100%); line-height: 1.5; }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -55,25 +101,98 @@
   <h1>Your person invited you</h1>
   <p class="sub">Join them on Tweli — one shared space for the two of you.</p>
 
-  <div class="card">
+  <!-- Tap-to-copy: they will need this code again after installing. -->
+  <button class="card" id="codecard" type="button">
     <div class="label">Your invite code</div>
     <div class="code" id="code">— — —</div>
-  </div>
+    <div class="copyhint" id="copyhint">Tap to copy</div>
+  </button>
 
   <a class="btn" id="cta" href="#">Get Tweli</a>
-  <p class="hint">Already have Tweli? Open it, tap <b>Join a space</b>, and enter the code above.</p>
+  <a class="ghost hidden" id="openapp" href="#">Already have Tweli? Open it</a>
+  <p class="hint" id="hint">Already have Tweli? Open it, tap <b>Join a space</b>, and enter the code above.</p>
 
   <script>
-    // If Tweli is installed, iOS opens the app directly and this page is never
-    // seen. It only shows when the app is missing — so point people to install.
+    // ---------------------------------------------------------------------
+    // CONFIG — the one line to change when distribution changes.
+    // Public TestFlight: "https://testflight.apple.com/join/XXXXXXXX"
+    // App Store:        "https://apps.apple.com/app/id0000000000"
+    // Leave as the sentinel below and the page shows an honest "opening soon"
+    // state instead of a dead button.
+    // ---------------------------------------------------------------------
+    var INSTALL_URL = 'PENDING';
+
     var params = new URLSearchParams(location.search);
-    var code = (params.get('code') || '').toUpperCase();
-    if (code) {
-      var pretty = code.length === 6 ? code.slice(0,3) + '-' + code.slice(3) : code;
-      document.getElementById('code').textContent = pretty;
+    var rawCode = (params.get('code') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    // Codes are 8 characters, split 4+4 — this must match
+    // FirebaseService.formatPairCode so the invitee sees exactly what the
+    // inviter sees. Legacy 6-character codes split 3+3.
+    function pretty(c) {
+      if (c.length === 8) return c.slice(0, 4) + '-' + c.slice(4);
+      if (c.length === 6) return c.slice(0, 3) + '-' + c.slice(3);
+      return c;
     }
-    // TODO: replace with the real App Store / TestFlight link once available.
-    document.getElementById('cta').href = 'https://apps.apple.com/app/tweli';
+
+    var codeEl = document.getElementById('code');
+    var cardEl = document.getElementById('codecard');
+    var hintEl = document.getElementById('copyhint');
+
+    if (rawCode) {
+      codeEl.textContent = pretty(rawCode);
+    } else {
+      // No code in the URL — do not show an empty box that looks broken.
+      cardEl.classList.add('hidden');
+      document.getElementById('hint').innerHTML =
+        'Open Tweli, tap <b>Join a space</b>, and enter the code your partner sent you.';
+    }
+
+    cardEl.addEventListener('click', function () {
+      if (!rawCode) return;
+      var done = function () {
+        hintEl.textContent = 'Copied';
+        setTimeout(function () { hintEl.textContent = 'Tap to copy'; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(pretty(rawCode)).then(done, function () {});
+      }
+    });
+
+    // --- Install CTA ------------------------------------------------------
+    var cta = document.getElementById('cta');
+    var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (INSTALL_URL === 'PENDING') {
+      // Never ship a dead link. Say the true thing instead.
+      cta.textContent = 'Tweli is opening soon';
+      cta.removeAttribute('href');
+      cta.style.background = 'rgba(128,128,128,0.22)';
+      cta.style.color = '#8A8A8E';
+      cta.style.boxShadow = 'none';
+      document.getElementById('hint').innerHTML =
+        'Keep your code — it stays valid for 48 hours. Already have Tweli? Open it, tap <b>Join a space</b>, and enter the code above.';
+    } else if (!isIOS) {
+      // Android / desktop: an App Store link here is a dead end.
+      cta.textContent = 'Tweli is an iPhone app';
+      cta.removeAttribute('href');
+      cta.style.background = 'rgba(128,128,128,0.22)';
+      cta.style.color = '#8A8A8E';
+      cta.style.boxShadow = 'none';
+      document.getElementById('hint').innerHTML =
+        'Open this invite on your iPhone to join. Your code stays valid for 48 hours.';
+    } else {
+      cta.href = INSTALL_URL;
+      // If they already have Tweli, the universal link should have opened the
+      // app — but it silently fails when tapped from an in-app browser, and
+      // Safari will not re-trigger a universal link for the domain it is
+      // already showing. The custom scheme (registered in Info.plist, handled
+      // by AppViewModel.handleDeepLink) is the reliable escape hatch.
+      var open = document.getElementById('openapp');
+      open.href = 'tweli://join?code=' + rawCode;
+      open.classList.remove('hidden');
+      document.getElementById('hint').classList.add('hidden');
+    }
   </script>
 </body>
 </html>

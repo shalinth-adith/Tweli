@@ -46,6 +46,7 @@ struct TweliApp: App {
                 .environmentObject(app.missingYouService)
                 .environmentObject(app.notifications)
                 .environmentObject(app.theme)
+                .environmentObject(app.review)
                 .tint(.twAccent)
         }
     }

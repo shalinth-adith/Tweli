@@ -8,10 +8,12 @@
 //
 
 import SwiftUI
+import StoreKit   // \.requestReview
 
 struct MainTabView: View {
     @EnvironmentObject private var app: AppViewModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.requestReview) private var requestReview
     @State private var selection = 0
 
     private var interstitialUp: Bool { app.freshMood != nil }
@@ -101,6 +103,13 @@ struct MainTabView: View {
             app.locationService.requestIfNeverAsked()
             #endif
             app.locationService.refreshIfStale()   // refresh our shared location if stale
+
+            // A rating ask, if a previous session armed one. Last in this task
+            // so the permission prompts above resolve first, on Home, and never
+            // over the mood interstitial — which is a moment of its own.
+            try? await Task.sleep(for: .seconds(2.5))
+            guard selection == 0, app.freshMood == nil else { return }
+            app.review.fireIfArmed(requestReview)
         }
     }
 }

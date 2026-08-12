@@ -289,7 +289,13 @@ struct OpenWhenLettersView: View {
 
     private func open(_ letter: OpenWhenLetter) {
         guard !letter.isLocked else { return }
-        if !letter.isOpened { service.markOpened(letter) }
+        if !letter.isOpened {
+            service.markOpened(letter)
+            // Opening a letter your person wrote for you is the second-best
+            // moment in the app to be asked for a rating. Arming only on the
+            // FIRST open keeps re-reads from re-arming it.
+            app.review.arm(.letterOpened)
+        }
         reading = service.letters.first { $0.id == letter.id } ?? letter
     }
 }
