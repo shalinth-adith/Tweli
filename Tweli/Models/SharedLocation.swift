@@ -10,7 +10,15 @@
 
 import Foundation
 
-struct SharedLocation: Identifiable, Codable, Hashable {
+/// A record that names which member of the couple wrote it, using the app's
+/// device-local profile UUID. That id is not stable across reinstalls, so the
+/// sync layer re-stamps it from the record's Firebase `authorUid` — see
+/// `AppViewModel.applyRemote`. Conformance is what opts a model into that.
+protocol LocallyAuthored {
+    var userId: UUID { get set }
+}
+
+struct SharedLocation: Identifiable, Codable, Hashable, LocallyAuthored {
     var id: UUID = UUID()
     var userId: UUID
     var latitude: Double

@@ -531,8 +531,35 @@ final class AppViewModel: ObservableObject {
         notifications.schedulePartnerBirthday(coupleSpaceService.partner?.birthday,
                                               partnerName: coupleSpaceService.partner?.displayName ?? "")
         let dec = JSONDecoder()
+        let myUid = cloud.currentUid
+
+        /// Decode, and re-stamp anything I wrote with my CURRENT local id.
+        ///
+        /// Moods and locations decide "mine vs theirs" by comparing the payload's
+        /// `userId` to `currentUserId` — a device-local UUID that is regenerated
+        /// whenever the local profile is recreated (reinstall, sign out and back
+        /// in). After that happens my own older records carry a stale id, so they
+        /// no longer match "mine" and start being read as my partner's. Because
+        /// my device keeps writing, they are also always the NEWEST such record,
+        /// so "newest wins" picks them every time.
+        ///
+        /// Observed live: a partner genuinely in Abu Dhabi, with the Home screen
+        /// reporting "8 m apart" — the gap between two of the user's own fixes.
+        ///
+        /// `authorUid` is the Firebase uid and survives all of that, so it is the
+        /// honest answer to "did I write this". Rewriting the local id here fixes
+        /// every consumer at once, without threading the author through seven
+        /// mergeRemote signatures.
         func decode<T: Decodable>(_ type: String) -> [T] {
-            (changes.payloadsByType[type] ?? []).compactMap { try? dec.decode(T.self, from: $0) }
+            (changes.payloadsByType[type] ?? []).compactMap { entry in
+                guard var item = try? dec.decode(T.self, from: entry.data) else { return nil }
+                if let myUid, !myUid.isEmpty, entry.authorUid == myUid,
+                   var authored = item as? any LocallyAuthored {
+                    authored.userId = coupleSpaceService.currentUser.id
+                    item = authored as! T
+                }
+                return item
+            }
         }
         reminderService.mergeRemote(decode(FirebaseService.RType.reminder), deletedIDs: changes.deletedIDs)
         countdownService.mergeRemote(decode(FirebaseService.RType.countdown), deletedIDs: changes.deletedIDs)

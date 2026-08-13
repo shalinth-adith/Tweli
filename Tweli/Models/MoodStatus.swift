@@ -6,7 +6,7 @@
 import Foundation
 
 /// A partner's current shared mood — reduces misunderstanding at a distance.
-struct MoodStatus: Identifiable, Codable, Hashable {
+struct MoodStatus: Identifiable, Codable, Hashable, LocallyAuthored {
     var id: UUID = UUID()
     var userId: UUID
     var mood: PartnerMood

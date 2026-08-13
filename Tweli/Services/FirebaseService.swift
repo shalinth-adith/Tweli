@@ -669,7 +669,14 @@ final class FirebaseService: ObservableObject {
     /// the ids that were deleted. Same shape as the CloudKit version so
     /// AppViewModel's decode + mergeRemote wiring is reused verbatim.
     struct RemoteChanges {
-        var payloadsByType: [String: [Data]] = [:]     // keyed by RType
+        /// Decoded payloads plus the uid that WROTE each one. `authorUid` is the
+        /// Firebase uid and is stable across reinstalls; the `userId` inside the
+        /// payload is a device-local UUID that is regenerated whenever the local
+        /// profile is recreated. Distinguishing "mine" from "my partner's" on the
+        /// payload id alone therefore breaks after a reinstall — your own older
+        /// records start looking like theirs. Carrying the author lets the
+        /// consumer settle it correctly.
+        var payloadsByType: [String: [(data: Data, authorUid: String)]] = [:]     // keyed by RType
         var deletedIDs: [UUID] = []
         var partnerJoinedName: String? = nil           // set when the space doc shows member #2
         /// Set when the OTHER member removed themselves from the space (comp E6).
@@ -741,7 +748,9 @@ final class FirebaseService: ObservableObject {
                     case .added, .modified:
                         if let payload = change.document["payload"] as? String,
                            let data = payload.data(using: .utf8) {
-                            changes.payloadsByType[type, default: []].append(data)
+                            let author = change.document["authorUid"] as? String ?? ""
+                            changes.payloadsByType[type, default: []]
+                                .append((data: data, authorUid: author))
                         }
                     case .removed:
                         if let uuid = UUID(uuidString: change.document.documentID) {
@@ -827,7 +836,8 @@ final class FirebaseService: ObservableObject {
             guard let snapshot = try? await spaceRef.collection(type).getDocuments() else { continue }
             for doc in snapshot.documents {
                 if let payload = doc["payload"] as? String, let data = payload.data(using: .utf8) {
-                    out.payloadsByType[type, default: []].append(data)
+                    let author = doc["authorUid"] as? String ?? ""
+                    out.payloadsByType[type, default: []].append((data: data, authorUid: author))
                 }
             }
         }
