@@ -28,6 +28,10 @@
       {
         "source": "/join",
         "destination": "/join/index.html"
+      },
+      {
+        "source": "/privacy",
+        "destination": "/privacy/index.html"
       }
     ],
     "headers": [

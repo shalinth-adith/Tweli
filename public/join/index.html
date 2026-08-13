@@ -120,7 +120,7 @@
     // Leave as the sentinel below and the page shows an honest "opening soon"
     // state instead of a dead button.
     // ---------------------------------------------------------------------
-    var INSTALL_URL = 'PENDING';
+    var INSTALL_URL = 'https://testflight.apple.com/join/jsJTMSdN';
 
     var params = new URLSearchParams(location.search);
     var rawCode = (params.get('code') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -183,6 +183,10 @@
         'Open this invite on your iPhone to join. Your code stays valid for 48 hours.';
     } else {
       cta.href = INSTALL_URL;
+      // While distribution is TestFlight, "Get Tweli" oversells it — the invitee
+      // is joining a beta and should know that before they tap.
+      cta.textContent = INSTALL_URL.indexOf('testflight') !== -1
+        ? 'Get Tweli (beta)' : 'Get Tweli';
       // If they already have Tweli, the universal link should have opened the
       // app — but it silently fails when tapped from an in-app browser, and
       // Safari will not re-trigger a universal link for the domain it is
