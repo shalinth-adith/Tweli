@@ -321,8 +321,16 @@ struct JoinSpaceView: View {
     }
 
     /// Comp J1/J2: "Two more characters to go"; J4: an offer, not a dead end.
+    ///
+    /// Gated on `isComplete`, not on `remaining`. `isPlausiblePairCode` accepts
+    /// SIX characters as well as eight, so that invites minted before the format
+    /// change still redeem — which means a six-character entry is genuinely
+    /// submittable while `remaining` still reads 2. Driving this line off
+    /// `remaining` alone put "Looks right — tap to join." and "2 more characters
+    /// to go" on screen simultaneously, with the button live and two cells empty.
     private var helperLine: String {
         if hasError { return "Ask them to resend the code" }
+        if isComplete { return "" }
         switch remaining {
         case 0:  return ""
         case 1:  return "One more character to go"

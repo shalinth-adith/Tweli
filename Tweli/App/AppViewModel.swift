@@ -550,15 +550,12 @@ final class AppViewModel: ObservableObject {
         /// honest answer to "did I write this". Rewriting the local id here fixes
         /// every consumer at once, without threading the author through seven
         /// mergeRemote signatures.
+        let meId = coupleSpaceService.currentUser.id
         func decode<T: Decodable>(_ type: String) -> [T] {
             (changes.payloadsByType[type] ?? []).compactMap { entry in
-                guard var item = try? dec.decode(T.self, from: entry.data) else { return nil }
-                if let myUid, !myUid.isEmpty, entry.authorUid == myUid,
-                   var authored = item as? any LocallyAuthored {
-                    authored.userId = coupleSpaceService.currentUser.id
-                    item = authored as! T
-                }
-                return item
+                RecordAuthorship.decode(T.self, from: entry.data, decoder: dec,
+                                        authorUid: entry.authorUid,
+                                        myUid: myUid, myLocalId: meId)
             }
         }
         reminderService.mergeRemote(decode(FirebaseService.RType.reminder), deletedIDs: changes.deletedIDs)
