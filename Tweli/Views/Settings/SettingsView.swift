@@ -13,6 +13,16 @@
 import SwiftUI
 import UserNotifications
 
+private extension String {
+    /// Treats a whitespace-only string as absent. Synced profile fields arrive as
+    /// strings, and an empty one must fall through to the next source rather than
+    /// render as a blank line.
+    var nilIfBlank: String? {
+        let t = trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
+}
+
 struct SettingsView: View {
     @EnvironmentObject private var app: AppViewModel
     @EnvironmentObject private var auth: AuthService
@@ -73,6 +83,14 @@ struct SettingsView: View {
                 sectionLabel("About")
                 group {
                     valueRow("heart.fill", "Tweli", appVersion, tint: .twAccent)
+                    divider
+                    // App Review expects the policy reachable from inside the app,
+                    // not only from the App Store listing, wherever an account and
+                    // location are involved (guideline 5.1.1).
+                    Link(destination: Self.privacyPolicyURL) {
+                        chevronRow("hand.raised.fill", "Privacy policy", tint: .twAccent2)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 // Leaving lives behind its own screen now (comp W1 → W2 → W3),
@@ -154,6 +172,10 @@ struct SettingsView: View {
         }
     }
 
+    /// Hosted alongside the invite landing page, so it stays reachable even if
+    /// the App Store listing changes. Also the URL given to App Store Connect.
+    static let privacyPolicyURL = URL(string: "https://tweli-9a99e.web.app/privacy")!
+
     // MARK: - Hero (two avatars, one thread, three numbers)
 
     private var heroCard: some View {
@@ -177,6 +199,28 @@ struct SettingsView: View {
                     .foregroundStyle(Color.twInkSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.top, 3)
+            }
+
+            // The partner's own words (comp X5), synced via `memberBios`. This is
+            // the screen X6 means by "what they see when they open your profile" —
+            // without it, the bio the flow collects would be write-only.
+            if let bio = couple.partner?.bio, !bio.isEmpty {
+                Text("“\(bio)”")
+                    .font(.system(size: 13.5))
+                    .italic()
+                    .foregroundStyle(Color.twInkSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+                    .padding(.horizontal, 6)
+            }
+
+            if let bday = partnerBirthdayLine {
+                Text(bday)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.twAccentInk)
+                    .padding(.top, 8)
             }
 
             if !stats.isEmpty {
@@ -234,12 +278,23 @@ struct SettingsView: View {
         return "\(me) ♥ \(partner)"
     }
 
-    /// Only rendered when both cities are actually known.
+    /// Only rendered when a city is actually known. Prefers what each person
+    /// TYPED (`memberCities`, comp X4) and falls back to the reverse-geocoded
+    /// label from location sharing — the typed value is the one they chose, and
+    /// it exists even when they never granted location access.
     private var citiesLine: String? {
-        let mine = location.myLocation?.cityLabel
-        let theirs = location.partnerLocation?.cityLabel
+        let mine = couple.currentUser.city?.nilIfBlank ?? location.myLocation?.cityLabel
+        let theirs = couple.partner?.city?.nilIfBlank ?? location.partnerLocation?.cityLabel
         let known = [mine, theirs].compactMap { $0 }
         return known.isEmpty ? nil : known.joined(separator: " · ")
+    }
+
+    /// "Anaya's birthday · 12 Sep" — only once they've actually shared one.
+    private var partnerBirthdayLine: String? {
+        guard let bday = couple.partner?.birthday else { return nil }
+        let name = couple.partner?.displayName ?? "Their"
+        let day = bday.formatted(.dateTime.day().month(.abbreviated))
+        return "\(name)'s birthday · \(day)"
     }
 
     private struct Stat { let value: String; let label: String; let tint: Color }

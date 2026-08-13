@@ -28,28 +28,63 @@ enum AppEnvironment {
     /// It writes NO content: no moods, reminders, letters, dates or partner. The
     /// app lands on Home in its true empty state. Must run before any service
     /// reads UserDefaults, so call it from `TweliApp.init()`.
+    /// How far through first-run setup the launch override should skip. Each
+    /// stage stops one screen short of the next, so a headless capture can land
+    /// on the profile flow (X1–X6) or the join screen (J1–J5) — neither of which
+    /// is reachable once everything is marked done.
+    private enum Stage: String {
+        case profile   // signed in, tutorial done, profile flow NOT done  → X1–X6
+        case room      // profile done, no space yet                       → RoomSetup / J1–J5
+        case tabs      // everything done, empty space                     → MainTabView
+    }
+
     static func applyLaunchOverridesIfNeeded() {
         let env = ProcessInfo.processInfo.environment
-        guard env["TWELI_SKIP_ONBOARDING"] == "1" else { return }
         let d = UserDefaults.standard
-        d.set(true, forKey: "tweli.aboutYouDone")
-        d.set(true, forKey: "tweli.roomSetupComplete")
-        // Comp 0Z sits between the splash and sign-in; without this a headless
-        // capture lands on page 1 of the tutorial instead of the tabs.
+
+        // Capturing the tutorial means forcing its gate back OPEN. It is shown
+        // once per install, so without this the second capture onwards lands
+        // wherever the previous launch left the app.
+        if env["TWELI_TUTORIAL_PAGE"] != nil {
+            d.set(false, forKey: TutorialGate.key)
+            return
+        }
+
+        guard env["TWELI_SKIP_ONBOARDING"] == "1" else { return }
+
+        // TWELI_STAGE=profile|room|tabs. Absent means `tabs`, which is what
+        // every existing capture script already expects.
+        let stage = Stage(rawValue: env["TWELI_STAGE"] ?? "") ?? .tabs
+
+        // Every flag is written explicitly, true OR false. Only setting the
+        // ones a stage needs leaves the others at whatever the last launch
+        // wrote — and `simctl spawn defaults delete` does not reliably clear
+        // them, so a stale `aboutYouDone` silently skips the screen under test.
+        // Authoritative writes make each launch independent of history.
         d.set(true, forKey: TutorialGate.key)
         if d.string(forKey: "tweli.auth.appleUserId") == nil {
             d.set("dev-\(UUID().uuidString)", forKey: "tweli.auth.appleUserId")
         }
-        // An empty space so the tab bar is reachable. This is app STATE, not
-        // content: no partner, no moods, no reminders, no letters, no dates —
-        // which is exactly the comp's E5 "half a thread" state.
-        if d.data(forKey: "tweli.coupleSpace") == nil {
-            let space = CoupleSpace(title: "Our space",
-                                    createdBy: UUID(),
-                                    partnerIds: [])
-            if let data = try? JSONEncoder().encode(space) {
-                d.set(data, forKey: "tweli.coupleSpace")
+
+        d.set(stage != .profile, forKey: "tweli.aboutYouDone")
+        d.set(stage == .tabs, forKey: "tweli.roomSetupComplete")
+
+        if stage == .tabs {
+            // An empty space so the tab bar is reachable. This is app STATE, not
+            // content: no partner, no moods, no reminders, no letters, no dates —
+            // which is exactly the comp's E5 "half a thread" state.
+            if d.data(forKey: "tweli.coupleSpace") == nil {
+                let space = CoupleSpace(title: "Our space",
+                                        createdBy: UUID(),
+                                        partnerIds: [])
+                if let data = try? JSONEncoder().encode(space) {
+                    d.set(data, forKey: "tweli.coupleSpace")
+                }
             }
+        } else {
+            // `isConnected` is `coupleSpace != nil`, so a leftover space would
+            // route straight past the profile flow and the join screen.
+            d.removeObject(forKey: "tweli.coupleSpace")
         }
     }
 #endif

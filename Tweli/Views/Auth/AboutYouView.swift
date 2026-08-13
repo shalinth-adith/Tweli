@@ -107,7 +107,10 @@ struct AboutYouView: View {
             BrandCTA(title: isEditing ? "Save" : "Continue", showsArrow: !isEditing) {
                 save()
                 if isEditing {
-                    app.pushMyNameToSpace()   // partner sees the rename live
+                    // Push the whole profile, not just the name — editing your
+                    // city here has to reach the partner the same way the X1–X6
+                    // flow's does, or the two editors disagree.
+                    app.pushMyProfileToSpace()
                     dismiss()
                 } else {
                     app.finishAboutYou()

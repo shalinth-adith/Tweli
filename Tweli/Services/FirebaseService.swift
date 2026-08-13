@@ -569,6 +569,52 @@ final class FirebaseService: ObservableObject {
         }
     }
 
+    /// Date-only wire format for birthdays. A `Timestamp` would carry an instant,
+    /// and a birthday read back in another zone can then land on the day before —
+    /// the exact bug that makes a partner's nudge fire on the wrong date. A plain
+    /// `yyyy-MM-dd` string has no zone to get wrong.
+    static let birthdayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    /// Write MY bio, city and birthday into the space doc so the partner's device
+    /// can read them. These ride the same member-map pattern as `memberNames` and
+    /// `memberTimezones`, and `isMemberEdit` in firestore.rules places no
+    /// `hasOnly` restriction on the document's other keys — so this needs no rules
+    /// change.
+    ///
+    /// Empty values are removed rather than written as "", so clearing a bio on
+    /// one device actually clears it on the other.
+    func updateMyProfileDetails(bio: String?, city: String?, birthday: Date?) async {
+        guard role != .none, !isDevOrOffline, let spaceId, let uid = currentUid else { return }
+
+        func entry(_ path: String, _ value: String?) -> (FieldPath, Any) {
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (FieldPath([path, uid]),
+                    (trimmed?.isEmpty ?? true) ? FieldValue.delete() : trimmed!)
+        }
+
+        var payload: [AnyHashable: Any] = ["updatedAt": FieldValue.serverTimestamp()]
+        for (path, value) in [entry("memberBios", bio),
+                              entry("memberCities", city),
+                              entry("memberBirthdays",
+                                    birthday.map { Self.birthdayFormatter.string(from: $0) })] {
+            payload[path] = value
+        }
+
+        do {
+            try await db.collection("spaces").document(spaceId).updateData(payload)
+            log("member profile details written for \(uid)")
+        } catch {
+            log("updateMyProfileDetails failed: \(error.localizedDescription)")
+        }
+    }
+
     /// Owner: the partner's display name once they've joined, or nil. Reads the
     /// `memberNames` map on the space doc (replaces the CKShare participant poll).
     /// The space-doc listener drives this live in normal operation; this shim covers
@@ -632,6 +678,43 @@ final class FirebaseService: ObservableObject {
         /// Their device writes it on every sync, so this is available even when
         /// they have never shared a location.
         var partnerTimeZoneId: String? = nil
+        /// The partner's own words, from `memberBios` (comp X5/X6).
+        var partnerBio: String? = nil
+        /// The city the partner TYPED (`memberCities`) — distinct from the
+        /// reverse-geocoded `SharedLocation.cityLabel`, which only exists if they
+        /// opted into location sharing.
+        var partnerCity: String? = nil
+        /// The partner's birthday from `memberBirthdays`, parsed from `yyyy-MM-dd`.
+        var partnerBirthday: Date? = nil
+    }
+
+    /// Pull the partner's bio, city and birthday out of a raw space document.
+    ///
+    /// Deliberately a pure static function over `[String: Any]` rather than code
+    /// inline in the snapshot closure: this is the half of the profile sync that
+    /// decides whether anything the partner typed is ever seen, and a closure
+    /// inside a Firestore listener cannot be tested without a live backend.
+    /// Given a dictionary, it can.
+    ///
+    /// Absent keys stay nil, so a partner who filled nothing in reads as "not
+    /// set" rather than as an empty string every view would have to special-case.
+    /// `nonisolated` because it touches no instance state — it is a pure
+    /// transform from a dictionary to three optionals. The enclosing type is
+    /// `@MainActor`, which would otherwise force every caller (including tests)
+    /// onto the main actor for no reason.
+    nonisolated static func applyPartnerDetails(from data: [String: Any],
+                                                partnerUid: String,
+                                                into changes: inout RemoteChanges) {
+        func value(_ key: String) -> String? {
+            let map = data[key] as? [String: String] ?? [:]
+            guard let raw = map[partnerUid] else { return nil }
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        changes.partnerBio = value("memberBios")
+        changes.partnerCity = value("memberCities")
+        changes.partnerBirthday = value("memberBirthdays")
+            .flatMap { birthdayFormatter.date(from: $0) }
     }
 
     /// Attach live listeners on the space doc + all six item subcollections (7
@@ -703,6 +786,7 @@ final class FirebaseService: ObservableObject {
             if let partnerUid {
                 let zones = data["memberTimezones"] as? [String: String] ?? [:]
                 changes.partnerTimeZoneId = zones[partnerUid]
+                Self.applyPartnerDetails(from: data, partnerUid: partnerUid, into: &changes)
             }
             onChange(changes)
         }
@@ -796,6 +880,14 @@ final class FirebaseService: ObservableObject {
             try await db.collection("spaces").document(spaceId).updateData([
                 "memberUids": FieldValue.arrayRemove([uid]),
                 "fcmTokens.\(uid)": FieldValue.delete(),
+                // Your bio, city and birthday go with you. `memberNames` stays
+                // on purpose — comp E6 needs the name to say who left — but
+                // there is no reason the rest should linger in a space you are
+                // no longer part of. `isMemberLeave` puts no `hasOnly` guard on
+                // these keys, so removing them here is permitted.
+                "memberBios.\(uid)": FieldValue.delete(),
+                "memberCities.\(uid)": FieldValue.delete(),
+                "memberBirthdays.\(uid)": FieldValue.delete(),
                 "leftBy": uid,
                 "leftAt": FieldValue.serverTimestamp(),
                 "updatedAt": FieldValue.serverTimestamp()

@@ -131,6 +131,70 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
         center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
     }
 
+    /// Comp X3's promise — "\(days) days away, they get a quiet nudge before" —
+    /// made real. Two alerts: three days out to leave time to do something, and
+    /// the morning itself.
+    ///
+    /// `repeats: true` on a month/day match makes these annual, so they survive
+    /// without the app re-scheduling every year. Both ids are stable, so calling
+    /// this on every sync replaces rather than accumulates — and passing `nil`
+    /// (partner cleared their birthday, or left) removes them.
+    func schedulePartnerBirthday(_ birthday: Date?, partnerName: String) {
+        let ids = [Self.birthdayLeadId, Self.birthdayDayId]
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+
+        guard let birthday else { return }
+        let who = partnerName.trimmingCharacters(in: .whitespaces)
+        let name = who.isEmpty ? "Your partner" : who
+
+        let cal = Calendar.current
+        let md = cal.dateComponents([.month, .day], from: birthday)
+        guard let month = md.month, let day = md.day else { return }
+
+        // Three days out. Built by walking back from this year's occurrence so
+        // month lengths and year boundaries are the calendar's problem, not ours.
+        var thisYear = DateComponents()
+        thisYear.year = cal.component(.year, from: Date())
+        thisYear.month = month
+        thisYear.day = day
+        if let occurrence = cal.date(from: thisYear),
+           let lead = cal.date(byAdding: .day, value: -3, to: occurrence) {
+            let l = cal.dateComponents([.month, .day], from: lead)
+            scheduleAnnual(id: Self.birthdayLeadId,
+                           title: "\(name)'s birthday is in 3 days",
+                           body: "Time to seal a letter, or plan something small.",
+                           month: l.month, day: l.day, hour: 10)
+        }
+
+        scheduleAnnual(id: Self.birthdayDayId,
+                       title: "It's \(name)'s birthday 🎂",
+                       body: "Say something before their day gets going.",
+                       month: month, day: day, hour: 8)
+    }
+
+    private static let birthdayLeadId = "tweli.partnerBirthday.lead"
+    private static let birthdayDayId  = "tweli.partnerBirthday.day"
+
+    /// An annually-repeating calendar alert. Year is deliberately omitted — that
+    /// is what makes `repeats` mean "every year" rather than "once".
+    private func scheduleAnnual(id: String, title: String, body: String,
+                                month: Int?, day: Int?, hour: Int) {
+        guard let month, let day else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        var comps = DateComponents()
+        comps.month = month
+        comps.day = day
+        comps.hour = hour
+        comps.minute = 0
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
+        center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+    }
+
     func cancel(id: UUID) {
         center.removePendingNotificationRequests(withIdentifiers: [id.uuidString])
     }

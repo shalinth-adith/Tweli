@@ -81,12 +81,60 @@ final class CoupleSpaceService: ObservableObject {
         if !trimmed.isEmpty {
             currentUser.displayName = trimmed
             defaults.set(trimmed, forKey: authNameKey)   // keep the cloud-visible name in sync
+            // Keep the structured parts coherent with the single-field editor.
+            // Without this, renaming here leaves the X1/X2 values stale and
+            // `composedName` would keep returning the old name.
+            let parts = trimmed.split(separator: " ", maxSplits: 1).map(String.init)
+            currentUser.firstName = parts.first ?? ""
+            currentUser.lastName = parts.count > 1 ? parts[1] : ""
         }
         currentUser.birthday = birthday
         currentUser.city = city?.trimmingCharacters(in: .whitespaces)
         currentUser.timezoneIdentifier = timezoneIdentifier
         currentUser.photoData = photoData
         save(currentUser, userKey)
+    }
+
+    /// Save the profile collected by the X1–X6 flow, which asks for the name in
+    /// two parts and adds a bio. `displayName` is still what the partner sees via
+    /// `memberNames`, so it is composed here and kept as the single cloud-visible
+    /// string — nothing downstream has to learn about the split.
+    func updateProfile(firstName: String, lastName: String, birthday: Date?,
+                       city: String?, timezoneIdentifier: String?,
+                       bio: String?, photoData: Data?) {
+        currentUser.firstName = firstName.trimmingCharacters(in: .whitespaces)
+        currentUser.lastName  = lastName.trimmingCharacters(in: .whitespaces)
+
+        let composed = currentUser.composedName.trimmingCharacters(in: .whitespaces)
+        if !composed.isEmpty {
+            currentUser.displayName = composed
+            defaults.set(composed, forKey: authNameKey)
+        }
+
+        currentUser.birthday = birthday
+        currentUser.city = city?.trimmingCharacters(in: .whitespaces)
+        currentUser.timezoneIdentifier = timezoneIdentifier
+        let trimmedBio = bio?.trimmingCharacters(in: .whitespacesAndNewlines)
+        currentUser.bio = (trimmedBio?.isEmpty ?? true) ? nil : trimmedBio
+        currentUser.photoData = photoData
+        save(currentUser, userKey)
+    }
+
+    /// Apply the partner's synced profile fields (comps X4–X6). Called on every
+    /// space snapshot, so it must be idempotent and must not clobber a value with
+    /// nil just because one field happened to be absent from this update.
+    ///
+    /// A `nil` here means "not present in the space doc", which is also how a
+    /// cleared field arrives (the writer deletes the key). Both cases should show
+    /// nothing, so nil genuinely does mean clear.
+    func updatePartnerDetails(bio: String?, city: String?, birthday: Date?) {
+        guard var p = partner else { return }
+        guard p.bio != bio || p.city != city || p.birthday != birthday else { return }
+        p.bio = bio
+        p.city = city
+        p.birthday = birthday
+        partner = p
+        save(partner, partnerKey)
     }
 
     /// Mark the first-run "About you" step finished (completed or skipped).

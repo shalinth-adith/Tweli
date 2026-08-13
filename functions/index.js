@@ -418,6 +418,12 @@ exports.deleteAccount = onRequest(async (req, res) => {
           [`memberNames.${uid}`]: FieldValue.delete(),
           [`fcmTokens.${uid}`]: FieldValue.delete(),
           [`memberTimezones.${uid}`]: FieldValue.delete(),
+          // The profile the X1–X6 flow collects. Account deletion promises the
+          // user's data is removed — leaving their bio, city and birthday on a
+          // space their partner still owns would quietly break that.
+          [`memberBios.${uid}`]: FieldValue.delete(),
+          [`memberCities.${uid}`]: FieldValue.delete(),
+          [`memberBirthdays.${uid}`]: FieldValue.delete(),
           leftBy: uid,
           leftAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),

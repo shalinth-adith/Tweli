@@ -46,7 +46,10 @@ struct RootView: View {
                 SignInView()
                     .transition(.opacity)
             } else if !couple.hasCompletedAboutYou {
-                AboutYouView()
+                // Comps X1–X6. One question per screen on first run; AboutYouView
+                // is still the Settings editor, where a single form is right
+                // because the user came to change one specific thing.
+                ProfileFlowView()
                     .transition(.opacity)
             } else if !couple.isConnected {
                 RoomSetupView()

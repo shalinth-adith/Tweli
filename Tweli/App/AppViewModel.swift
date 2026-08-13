@@ -113,6 +113,11 @@ final class AppViewModel: ObservableObject {
     /// can show progress and a friendly error.
     @Published var redeemingCode = false
     @Published var joinError: String?
+    /// The typed failure behind `joinError`. Comps J4 and J5 are different
+    /// screens — "that code does not match any space" offers a retry, while an
+    /// expired code offers to ask for a fresh one — and the localized string
+    /// alone cannot tell them apart.
+    @Published var joinErrorKind: FirebaseService.PairCodeError?
 
     /// Handle a tweli:// deep link (widget "Send love", or an invite —
     /// tweli://join?code=7GK4PB → land on Join a space with the code filled).
@@ -153,12 +158,14 @@ final class AppViewModel: ObservableObject {
     func joinWithCode(_ code: String) async {
         redeemingCode = true
         joinError = nil
+        joinErrorKind = nil
         defer { redeemingCode = false }
         do {
             let invite = try await cloud.redeemPairCode(code)
             pendingInvite = PendingInvite(invite: invite)
         } catch {
             joinError = error.localizedDescription
+            joinErrorKind = error as? FirebaseService.PairCodeError
         }
     }
 
@@ -367,6 +374,18 @@ final class AppViewModel: ObservableObject {
         Task { await cloud.updateMyMemberName(coupleSpaceService.currentUser.displayName) }
     }
 
+    /// Push the whole profile — name AND the bio/city/birthday the X1–X6 flow
+    /// collects. Without this the last three are written to UserDefaults and
+    /// never leave the device, which makes X6's "this is what they see" false.
+    func pushMyProfileToSpace() {
+        let me = coupleSpaceService.currentUser
+        Task {
+            await cloud.updateMyMemberName(me.displayName)
+            await cloud.updateMyTimezone()
+            await cloud.updateMyProfileDetails(bio: me.bio, city: me.city, birthday: me.birthday)
+        }
+    }
+
     /// Leave the shared space: announce the departure so the partner's device
     /// can show E6, then clear local couple state AND detach cloud
     /// role/spaceId/listeners so a later join binds cleanly to the new space.
@@ -502,6 +521,15 @@ final class AppViewModel: ObservableObject {
             // so the one-shot check lives inside the service.
             review.notePartnerPresent()
         }
+        // The rest of their profile (comps X4–X6). Applied after the name so the
+        // partner record already exists to write onto.
+        coupleSpaceService.updatePartnerDetails(bio: changes.partnerBio,
+                                                city: changes.partnerCity,
+                                                birthday: changes.partnerBirthday)
+        // Their birthday is the one profile field that has to become an alarm —
+        // X3 promises a "quiet nudge before", and this is what keeps it.
+        notifications.schedulePartnerBirthday(coupleSpaceService.partner?.birthday,
+                                              partnerName: coupleSpaceService.partner?.displayName ?? "")
         let dec = JSONDecoder()
         func decode<T: Decodable>(_ type: String) -> [T] {
             (changes.payloadsByType[type] ?? []).compactMap { try? dec.decode(T.self, from: $0) }

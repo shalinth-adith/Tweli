@@ -76,7 +76,18 @@ struct RoomSetupView: View {
         }
         // An invite link (tapped or pasted) routes straight to Join a space, where
         // the code pre-fills. Handles the link arriving before OR after this screen.
-        .onAppear { if app.pendingJoinCode != nil, path.isEmpty { path = [.join] } }
+        .onAppear {
+            if app.pendingJoinCode != nil, path.isEmpty { path = [.join] }
+#if DEBUG
+            // Verification hook (DEBUG only): TWELI_ROOM=join|create opens the
+            // destination directly, because a headless simulator cannot tap the
+            // card that navigates there.
+            if path.isEmpty, let raw = ProcessInfo.processInfo.environment["TWELI_ROOM"] {
+                if raw == "join" { path = [.join] }
+                if raw == "create" { path = [.create] }
+            }
+#endif
+        }
         .onChange(of: app.pendingJoinCode) { _, code in
             if code != nil, path.last != .join { path = [.join] }
         }

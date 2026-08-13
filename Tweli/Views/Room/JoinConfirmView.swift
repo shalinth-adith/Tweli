@@ -15,7 +15,9 @@ struct JoinConfirmView: View {
 
     @State private var joining = false
     @State private var joinFailed = false
-    @State private var detent: PresentationDetent = .medium
+    @State private var accepted = false
+    @State private var detent: PresentationDetent = .large
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -25,39 +27,68 @@ struct JoinConfirmView: View {
                 confirmContent
             }
         }
-        .presentationDetents(joining ? [.large] : [.medium, .large], selection: $detent)
+        // J6 is a full-height moment, not a half card — the comp gives it the
+        // whole screen so the tick and the thread have room to land.
+        .presentationDetents([.large], selection: $detent)
         .interactiveDismissDisabled(joining)
     }
 
     // MARK: - Confirm
 
+    /// Comp J6 "Code accepted". The comp's whole idea is that this beat is a
+    /// payoff, not a form: the code is already known to be good, so the screen
+    /// names the person rather than asking the user to verify a space title.
     private var confirmContent: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 0) {
             Spacer(minLength: 8)
 
-            HStack(spacing: 0) {
-                AvatarBubble(initial: invite.inviterName, isPartner: true, size: 58)
-                Image(systemName: "ellipsis")
-                    .font(.title3).foregroundStyle(Color.twInkTertiary)
-                    .padding(.horizontal, 10)
-                ProfileAvatar(profile: app.currentUser, isPartner: false, size: 58)
+            // Green tick, then the thread draws between the two of you.
+            ZStack {
+                Circle()
+                    .fill(Color.twSuccess.opacity(0.16))
+                    .frame(width: 84, height: 84)
+                    .scaleEffect(accepted ? 1 : 0.6)
+                    .opacity(accepted ? 1 : 0)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 34, weight: .bold))
+                    .foregroundStyle(Color.twSuccess)
+                    .scaleEffect(accepted ? 1 : 0.4)
+                    .opacity(accepted ? 1 : 0)
             }
 
-            VStack(spacing: 8) {
-                Text("Join “\(invite.spaceTitle)”?")
-                    .font(.system(size: 24, weight: .heavy))
-                    .foregroundStyle(Color.twInk)
-                    .multilineTextAlignment(.center)
-                Text("\(invite.inviterName) invited you to your shared space 💞")
-                    .font(.subheadline).foregroundStyle(Color.twInkSecondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 12)
+            Text("Code accepted")
+                .font(.system(size: 12, weight: .bold))
+                .textCase(.uppercase)
+                .tracking(1.2)
+                .foregroundStyle(Color.twSuccess)
+                .padding(.top, 20)
 
-            Text("You'll share reminders, moods, countdowns and letters — just the two of you.")
-                .font(.footnote).foregroundStyle(Color.twInkTertiary)
+            Text("That’s \(invite.inviterName).")
+                .font(.system(size: 27, weight: .heavy))
+                .tracking(-0.6)
+                .foregroundStyle(Color.twInk)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+                .padding(.top, 8)
+
+            Text("Joining \(possessive(invite.inviterName)) space now.")
+                .font(.system(size: 14.5))
+                .foregroundStyle(Color.twInkSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 8)
+
+            HStack(spacing: 0) {
+                AvatarBubble(initial: invite.inviterName, isPartner: true, size: 54)
+                Rectangle().fill(.clear).frame(width: 74, height: 44)
+                    .overlay(
+                        ThreadConnect()
+                            .trim(from: 0, to: accepted ? 1 : 0)
+                            .stroke(TweliGradient.thread,
+                                    style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+                    )
+                    .padding(.horizontal, -4)
+                ProfileAvatar(profile: app.currentUser, isPartner: false, size: 54)
+            }
+            .padding(.top, 26)
 
             Spacer(minLength: 8)
 
@@ -69,7 +100,7 @@ struct JoinConfirmView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                BrandCTA(title: joinFailed ? "Try again" : "Join space", showsArrow: false) {
+                BrandCTA(title: joinFailed ? "Try again" : "Enter Tweli", showsArrow: false) {
                     join()
                 }
 
@@ -79,16 +110,28 @@ struct JoinConfirmView: View {
             }
         }
         .padding(.horizontal, 24).padding(.vertical, 20)
+        .onAppear {
+            guard !reduceMotion else { accepted = true; return }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.62)) { accepted = true }
+        }
+    }
+
+    /// "Anaya" → "Anaya's", "Chris" → "Chris'". Names are user-supplied, so the
+    /// trailing-s case is worth getting right rather than always appending "'s".
+    private func possessive(_ name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "their" }
+        return trimmed.lowercased().hasSuffix("s") ? "\(trimmed)’" : "\(trimmed)’s"
     }
 
     private func join() {
         joinFailed = false
-        withAnimation { joining = true; detent = .large }
+        withAnimation { joining = true }
         Task {
             let ok = await app.confirmPendingJoin()
             if !ok {
                 // Recover to the confirm card so the user can retry or dismiss.
-                withAnimation { joining = false; detent = .medium }
+                withAnimation { joining = false }
                 joinFailed = true
             }
             // On success the sheet dismisses itself (pendingInvite → nil) and the

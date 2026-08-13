@@ -95,6 +95,14 @@ struct TweliTests {
         let vm = AddReminderViewModel()
         vm.title = "   "                       // whitespace only
 
+        // Pin the time into the future. `validate()` returns `!hasErrors`, and
+        // hasErrors folds in `timeError` as well as `titleError` — and the view
+        // model defaults `time` to 21:00 today. Left alone, the final assertion
+        // below passes before 9pm and fails after it, every single evening.
+        // This test is about the TITLE, so the clock must not be a variable.
+        vm.date = Date().addingTimeInterval(60 * 60 * 24)
+        vm.time = Date().addingTimeInterval(60 * 60 * 24)
+
         // Nothing said before the user asks.
         #expect(vm.titleError == nil)
         // Save is dim…

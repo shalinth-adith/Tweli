@@ -28,6 +28,29 @@ struct UserProfile: Identifiable, Codable, Hashable {
     /// partner — that needs Firebase Storage / a doc field (see follow-up).
     var photoData: Data? = nil
 
+    // MARK: - Structured name + bio (comps X1, X2, X5)
+
+    /// Given name, collected on X1. `displayName` stays the authoritative,
+    /// cloud-visible string — these two are the structured source it is composed
+    /// from, kept so the flow can edit each part on its own page.
+    var firstName: String = ""
+    /// Family name, collected on X2. Optional by design: the comp's own copy
+    /// says "skip it and keep going".
+    var lastName: String = ""
+    /// One line the partner sees on your profile (X5). Capped at 120 characters
+    /// by the composer; `nil` until the person writes one.
+    var bio: String? = nil
+
+    /// `firstName`/`lastName` joined, falling back to whatever `displayName`
+    /// already held. Profiles created before X1–X6 have empty name parts and a
+    /// populated `displayName`, so this keeps reading correctly for them.
+    var composedName: String {
+        let parts = [firstName, lastName]
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return parts.isEmpty ? displayName : parts.joined(separator: " ")
+    }
+
     /// Initials used for the round avatar chips in the design.
     var initials: String {
         let parts = displayName.split(separator: " ")
