@@ -595,7 +595,7 @@ exports.leaveSpace = onRequest(async (req, res) => {
 // members), or it was created and never paired and then abandoned.
 //
 // The rule, set by the product owner: FEWER THAN TWO MEMBERS and untouched for
-// five days — delete the space and everything in it.
+// fifteen days — delete the space and everything in it.
 //
 // This is destructive and irreversible, so three safeguards are built in:
 //
@@ -609,14 +609,14 @@ exports.leaveSpace = onRequest(async (req, res) => {
 //      Absent is not the same as old, and guessing costs someone their letters.
 //
 // Note the honest trade this rule makes: a one-member space is also what
-// somebody waiting for their partner to install the app looks like. Five days
-// of not opening Tweli while waiting is ordinary, and their letters go with it.
-// That was raised and chosen deliberately.
+// somebody waiting for their partner to install the app looks like. Fifteen days
+// is a far kinder window than five, but it is still a window — someone who
+// invites a partner and waits three weeks loses what they wrote.
 // ---------------------------------------------------------------------------
 
 /** Report-only until this is flipped to false and redeployed. */
 const SWEEP_DRY_RUN = true;
-const SWEEP_IDLE_DAYS = 5;
+const SWEEP_IDLE_DAYS = 15;
 
 exports.sweepInactiveSpaces = onSchedule(
   { schedule: "every day 03:30", timeZone: "Asia/Kolkata", region: "asia-south1" },
