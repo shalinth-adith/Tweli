@@ -988,6 +988,22 @@ final class FirebaseService: ObservableObject {
     /// than the partner learning about it late.
     func announceLeave() async {
         guard !isDevOrOffline, let spaceId, let uid = currentUid else { return }
+
+        // Preferred path: the server tears down properly — deletes what this
+        // user wrote, and deletes the whole space when nobody is left. Neither
+        // is possible from here. `allow delete: if false` guards the space
+        // document, and the item rule requires membership, so a client that has
+        // already removed itself can no longer clean up after itself.
+        //
+        // Without it, leaving stranded the leaver's reminders, moods and
+        // locations in a space they had walked out of, permanently.
+        if await callLeaveSpaceFunction(spaceId: spaceId) { return }
+
+        // Fallback: the function is unreachable (offline, not yet deployed).
+        // Removing the membership is the one thing that matters — it is what
+        // stops the space being recovered into on a later sign-in — so it is
+        // still better than refusing to let someone leave.
+        log("leaveSpace function unavailable; falling back to a membership edit")
         do {
             try await db.collection("spaces").document(spaceId).updateData([
                 "memberUids": FieldValue.arrayRemove([uid]),
@@ -1011,6 +1027,39 @@ final class FirebaseService: ObservableObject {
     }
 
     // MARK: - Account deletion
+
+    /// Ask the server to tear the space down properly. Returns false when it
+    /// could not be reached, so the caller can fall back rather than trapping
+    /// someone in a space they have chosen to leave.
+    private func callLeaveSpaceFunction(spaceId: String) async -> Bool {
+        guard let url = functionURL("leaveSpace"),
+              let user = Auth.auth().currentUser,
+              let idToken = try? await user.getIDToken() else { return false }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["spaceId": spaceId])
+        request.timeoutInterval = 30
+
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else {
+            return false
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            log("leaveSpace HTTP \(status): \(String(data: data, encoding: .utf8) ?? "")")
+            return false
+        }
+        log("leaveSpace ok: \(String(data: data, encoding: .utf8) ?? "")")
+        return true
+    }
+
+    /// Region must match the functions' deployment region (asia-south1).
+    private func functionURL(_ name: String) -> URL? {
+        guard let projectId = FirebaseApp.app()?.options.projectID else { return nil }
+        return URL(string: "https://asia-south1-\(projectId).cloudfunctions.net/\(name)")
+    }
 
     /// The deployed `deleteAccount` HTTP function. Region must match
     /// `setGlobalOptions({ region })` in functions/index.js.

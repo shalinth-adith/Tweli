@@ -474,3 +474,114 @@ exports.deleteAccount = onRequest(async (req, res) => {
     res.status(500).json({ error: "Deletion failed. Nothing was partially removed from your account record." });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Leaving a space, properly.
+//
+// Leaving used to only edit `memberUids` client-side. Everything the leaver had
+// written — reminders, moods, locations — stayed in the space, along with their
+// name, and because `allow delete: if false` guards the space document the
+// client could never clean up after itself. A space you walked out of therefore
+// kept your data forever, and an emptied one lingered as a permanent orphan.
+//
+// The rule this restores is the one `deleteAccount` already encodes: alone in
+// the space, it dies with you; with a partner still there, your records go and
+// theirs are untouched. Letters are the single exception, kept for the partner
+// per the W1–W3 exit flow — there is someone left to read them.
+//
+// Server-side because two of the required operations are impossible from the
+// client: deleting the space document, and deleting items after you have
+// removed yourself from `memberUids` (the item rule requires membership).
+// ---------------------------------------------------------------------------
+exports.leaveSpace = onRequest(async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Use POST." });
+    return;
+  }
+
+  const header = req.get("Authorization") || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) {
+    res.status(401).json({ error: "Missing bearer token." });
+    return;
+  }
+
+  let uid;
+  try {
+    uid = (await getAuth().verifyIdToken(token)).uid;
+  } catch (err) {
+    console.error("leaveSpace: bad token:", err && err.message);
+    res.status(401).json({ error: "Invalid token." });
+    return;
+  }
+
+  const spaceId = req.body && req.body.spaceId;
+  if (!spaceId || typeof spaceId !== "string") {
+    res.status(400).json({ error: "spaceId required." });
+    return;
+  }
+
+  const db = getFirestore();
+  const ref = db.collection("spaces").doc(spaceId);
+
+  try {
+    const snap = await ref.get();
+    if (!snap.exists) {
+      res.json({ ok: true, alreadyGone: true });
+      return;
+    }
+
+    const data = snap.data() || {};
+    const members = data.memberUids || [];
+    // The uid comes from a verified token, so this cannot be used to evict
+    // someone else from a space they are in.
+    if (!members.includes(uid)) {
+      res.status(403).json({ error: "Not a member of that space." });
+      return;
+    }
+
+    const remaining = members.filter((u) => u !== uid);
+    const alone = remaining.length === 0;
+    const summary = { itemsDeleted: 0, spaceDeleted: false, lettersLeftBehind: 0 };
+
+    for (const type of ITEM_TYPES) {
+      const col = ref.collection(type);
+      // Someone is still here, so the letters you sealed for them stay — the
+      // exit flow promises exactly that. Alone, there is nobody to keep them.
+      if (type === "letters" && !alone) {
+        summary.lettersLeftBehind += await unsealLettersBy(db, col, uid);
+        continue;
+      }
+      const query = alone ? col : col.where("authorUid", "==", uid);
+      summary.itemsDeleted += await deleteQueryInBatches(db, query);
+    }
+
+    if (alone) {
+      await ref.delete();
+      summary.spaceDeleted = true;
+    } else {
+      await ref.update({
+        memberUids: FieldValue.arrayRemove(uid),
+        // The name moves to `leftByName` rather than lingering in memberNames:
+        // comp E6 still needs to say who left, and nothing else should keep
+        // holding the identity of someone who is gone.
+        leftByName: (data.memberNames || {})[uid] || "Your partner",
+        [`memberNames.${uid}`]: FieldValue.delete(),
+        [`fcmTokens.${uid}`]: FieldValue.delete(),
+        [`memberTimezones.${uid}`]: FieldValue.delete(),
+        [`memberBios.${uid}`]: FieldValue.delete(),
+        [`memberCities.${uid}`]: FieldValue.delete(),
+        [`memberBirthdays.${uid}`]: FieldValue.delete(),
+        leftBy: uid,
+        leftAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    console.log(`leaveSpace: ${uid} left ${spaceId}`, summary);
+    res.json({ ok: true, ...summary });
+  } catch (err) {
+    console.error("leaveSpace failed:", err && err.message);
+    res.status(500).json({ error: "Could not leave the space." });
+  }
+});
