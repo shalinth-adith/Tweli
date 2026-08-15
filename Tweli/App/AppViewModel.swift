@@ -322,6 +322,10 @@ final class AppViewModel: ObservableObject {
         guard !didBootstrap else { return }
         didBootstrap = true
         notifications.removeAllPending()   // clear stale (mock ids change per launch)
+        // Comps RA3/RA6/RA7/RA8/RA9 — a tapped action reaches the services here.
+        notifications.onAction = { [weak self] intent in
+            self?.handleNotificationAction(intent)
+        }
         reminderService.scheduleAll()
         countdownService.scheduleAll()
     }
@@ -370,6 +374,57 @@ final class AppViewModel: ObservableObject {
 
     /// Push my current profile name into the space doc — called after "About you"
     /// saves so the partner's device reflects a rename via its space-doc listener.
+    // MARK: - Notification actions (comps RA3, RA6, RA7, RA8, RA9)
+
+    /// Wired from `bootstrapNotifications`. Every case does real work — a
+    /// "Mark done" that only dismissed the banner would be worse than no button,
+    /// because the reminder would still be waiting when the user next looked.
+    func handleNotificationAction(_ intent: NotificationActionIntent) {
+        switch intent {
+        case .markReminderDone(let id):
+            guard let r = reminderService.reminders.first(where: { $0.id == id }) else { return }
+            reminderService.toggleDone(r)
+            notifications.cancelOverdueNudge(id: id)
+
+        case .snoozeReminder(let id):
+            guard let r = reminderService.reminders.first(where: { $0.id == id }) else { return }
+            // RA3's button is the 15-minute one; RA4's fuller sheet is reached
+            // by opening the reminder itself.
+            reminderService.snooze(r, minutes: 15)
+            notifications.cancelOverdueNudge(id: id)
+
+        case .replyToPartner(let text):
+            // RA3 "Reply to Anaya". Sent as a mood note, which is the only
+            // free-text channel that reaches them without opening the app.
+            let current = moodService.myMood?.mood ?? .thinkingOfYou
+            moodService.setMyMood(current, note: text)
+
+        case .openLetters:
+            requestedTab = 3
+
+        case .saveLetterForTonight:
+            // RA7. Nothing is opened and nothing is marked read — the letter
+            // simply stays sealed, which is already true. Recorded so the
+            // action is honest about doing nothing destructive.
+            break
+
+        case .sendLoveBack:
+            // RA8's "❤️" — the same ping the widget's Send love sends.
+            missingYouService.send(.thinkingOfYou,
+                                   senderName: coupleSpaceService.currentUser.displayName)
+
+        case .checkInOnPartner:
+            requestedTab = 2
+            focusMoodMessage = true
+
+        case .acceptDate, .suggestAnotherTime:
+            requestedTab = 1
+
+        case .openApp:
+            break
+        }
+    }
+
     func pushMyNameToSpace() {
         Task { await cloud.updateMyMemberName(coupleSpaceService.currentUser.displayName) }
     }

@@ -21,6 +21,10 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
     override init() {
         super.init()
         center.delegate = self
+        // Comps RA3/RA6/RA7/RA8/RA9. Registered at launch rather than at
+        // permission time: a notification that arrives before the user has
+        // opened the relevant screen still needs its buttons.
+        center.setNotificationCategories(TweliNotification.categories)
         refreshAuthorizationStatus()
     }
 
@@ -59,24 +63,17 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
             ? "Your partner" : partnerName
 
         let content = UNMutableNotificationContent()
-        content.title = reminder.title
-        switch reminder.assignedTo {
-        case .both:
-            // Fires on both phones; only the person who didn't set it needs
-            // telling who did.
-            content.subtitle = mine ? "For both of you 💞" : "\(who) set this for both of you 💞"
-        case .partner:
-            // Only ever delivered to the partner — so the reader IS the person
-            // it was set for. Saying "a nudge for your partner" here told them
-            // it was meant for someone else.
-            content.subtitle = "\(who) asked you to remember this 💗"
-        case .me:
-            // Only ever delivered to the person who set it; no attribution needed.
-            break
-        }
-        content.body = reminder.note.isEmpty
-            ? "A small care reminder ❤️"
-            : reminder.note
+        // RA1: the card says who asked. `reminder.title` moves to the body so
+        // the top line can carry attribution, as every RA comp shows.
+        content.title = TweliNotification.reminderTitle(mine: mine, partnerName: who)
+        content.subtitle = reminder.title
+        content.categoryIdentifier = TweliNotification.Category.reminder
+        content.userInfo["reminderId"] = reminder.id.uuidString
+
+        // RA1's third line is the schedule — "9:00 PM · every night" — not the
+        // note. A note, when there is one, is the more useful thing to read, so
+        // it wins; the schedule is the fallback rather than filler.
+        content.body = reminder.note.isEmpty ? scheduleLine(reminder) : reminder.note
         content.sound = .default
 
         // Read the reminder's time in the AUTHOR's zone to recover the wall-clock
@@ -253,12 +250,139 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
         await center.pendingNotificationRequests().count
     }
 
+    // MARK: - RA1 · the schedule line
+
+    /// "9:00 PM · every night" — the comp's third line.
+    private func scheduleLine(_ reminder: ReminderItem) -> String {
+        let time = reminder.localFireDate.formatted(date: .omitted, time: .shortened)
+        switch reminder.repeatType {
+        case .none, .custom: return time
+        case .daily:         return "\(time) · every night"
+        case .weekly:        return "\(time) · every week"
+        case .monthly:       return "\(time) · every month"
+        }
+    }
+
+    // MARK: - RA5 · the completion echo
+
+    /// Comp RA5: "Anaya got it done". Deliberately silent — no sound, no badge.
+    /// A completion is a courtesy, not a demand, and the comp's own note says
+    /// completions "come back quietly … just the widget ticking over".
+    func notifyCompletion(of title: String, byPartnerNamed name: String) {
+        let content = UNMutableNotificationContent()
+        content.title = TweliNotification.completionTitle(partnerName: name)
+        content.body = title
+        content.categoryIdentifier = TweliNotification.Category.completion
+        content.interruptionLevel = .passive     // no sound, no wake
+        // sound intentionally left nil, badge intentionally not set
+
+        center.add(UNNotificationRequest(identifier: "tweli.completion.\(UUID().uuidString)",
+                                         content: content, trigger: nil))
+    }
+
+    // MARK: - RA6 · overdue, once
+
+    private static func overdueId(_ id: UUID) -> String { "tweli.overdue.\(id.uuidString)" }
+
+    /// Comp RA6: one amber nudge 45 minutes after the due time, then it lets go.
+    /// Scheduling is keyed by reminder id, so re-running this replaces rather
+    /// than stacks — "Tweli nudges once and then lets it go."
+    func scheduleOverdueNudge(for reminder: ReminderItem, partnerName: String) {
+        let id = Self.overdueId(reminder.id)
+        center.removePendingNotificationRequests(withIdentifiers: [id])
+
+        // Only for one-offs someone else set: a repeating reminder comes round
+        // again by itself, and nagging about your own is just noise.
+        guard !reminder.isCompleted, reminder.repeatType == .none else { return }
+        let fireAt = reminder.localFireDate.addingTimeInterval(45 * 60)
+        guard fireAt > Date() else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = TweliNotification.overdueTitle(partnerName: partnerName)
+        content.subtitle = reminder.title
+        content.body = "Due \(reminder.localFireDate.formatted(date: .omitted, time: .shortened)) · last nudge tonight"
+        content.categoryIdentifier = TweliNotification.Category.reminderOverdue
+        content.userInfo["reminderId"] = reminder.id.uuidString
+        content.interruptionLevel = .passive     // amber and silent, per the comp
+
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute],
+                                                    from: fireAt)
+        center.add(UNNotificationRequest(
+            identifier: id, content: content,
+            trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
+    }
+
+    func cancelOverdueNudge(id: UUID) {
+        center.removePendingNotificationRequests(withIdentifiers: [Self.overdueId(id)])
+    }
+
     // MARK: - UNUserNotificationCenterDelegate
 
-    /// Show banners even while the app is in the foreground.
+    /// Show banners even while the app is in the foreground — except the silent
+    /// ones, which should stay silent wherever they land (RA5, RA8).
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             willPresent notification: UNNotification) async
         -> UNNotificationPresentationOptions {
-        [.banner, .sound, .list]
+        let category = notification.request.content.categoryIdentifier
+        if category == TweliNotification.Category.completion
+            || category == TweliNotification.Category.mood {
+            return [.banner, .list]              // no .sound
+        }
+        return [.banner, .sound, .list]
+    }
+
+    /// Route a tapped action. The work itself belongs to the services, so this
+    /// only translates an identifier into an intent and hands it on — a handler
+    /// wired by AppViewModel, which is the only thing that can see them all.
+    var onAction: ((NotificationActionIntent) -> Void)?
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            didReceive response: UNNotificationResponse) async {
+        let info = response.notification.request.content.userInfo
+        let reminderId = (info["reminderId"] as? String).flatMap(UUID.init(uuidString:))
+        let text = (response as? UNTextInputNotificationResponse)?.userText
+
+        await MainActor.run {
+            guard let intent = NotificationActionIntent(actionId: response.actionIdentifier,
+                                                        reminderId: reminderId,
+                                                        text: text) else { return }
+            self.onAction?(intent)
+        }
+    }
+}
+
+/// What a tapped notification action means, independent of UserNotifications.
+enum NotificationActionIntent {
+    case markReminderDone(UUID)
+    case snoozeReminder(UUID)
+    case replyToPartner(String)
+    case openLetters
+    case saveLetterForTonight
+    case sendLoveBack
+    case checkInOnPartner
+    case acceptDate
+    case suggestAnotherTime
+    case openApp
+
+    init?(actionId: String, reminderId: UUID?, text: String?) {
+        switch actionId {
+        case TweliNotification.Action.markDone:
+            guard let reminderId else { return nil }
+            self = .markReminderDone(reminderId)
+        case TweliNotification.Action.snooze:
+            guard let reminderId else { return nil }
+            self = .snoozeReminder(reminderId)
+        case TweliNotification.Action.replyToPartner:
+            guard let text, !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+            self = .replyToPartner(text)
+        case TweliNotification.Action.openLetter:        self = .openLetters
+        case TweliNotification.Action.saveLetterForTonight: self = .saveLetterForTonight
+        case TweliNotification.Action.sendLoveBack:      self = .sendLoveBack
+        case TweliNotification.Action.checkIn:           self = .checkInOnPartner
+        case TweliNotification.Action.dateAccept:        self = .acceptDate
+        case TweliNotification.Action.dateSuggestAnother: self = .suggestAnotherTime
+        case UNNotificationDefaultActionIdentifier:      self = .openApp
+        default: return nil                              // dismiss, or unknown
+        }
     }
 }

@@ -94,9 +94,16 @@ exports.notifyPartnerOnItemWrite = onDocumentWritten(
     const recipientTz = (space.memberTimezones || {})[recipientUid];
     const quiet = isQuietHour(recipientTz, prefs);
 
-    const aps = quiet
+    // `notif.silent` is the comps' own rule for two kinds of push: a completion
+    // echo (RA5) and a mood change (RA8). Both arrive without sound or badge
+    // even outside quiet hours — they are news, not demands.
+    const hush = quiet || notif.silent === true;
+    const aps = hush
       ? { "mutable-content": 1, "interruption-level": "passive" } // no sound key
       : { sound: "default", "mutable-content": 1 };
+    // The category is what gives a pulled-open notification its buttons
+    // (RA3/RA6/RA7/RA8/RA9). Without it iOS shows the text and nothing else.
+    if (notif.category) aps.category = notif.category;
 
     const message = {
       token,
@@ -208,9 +215,17 @@ function buildNotification(type, afterData, beforeData, isCreate) {
   switch (type) {
     case "moods": {
       // Notify on create AND update — a changed mood is the whole point.
+      // RA8: "Anaya is feeling worn out". Silent and never repeated — one per
+      // change — so the category carries no sound and the client presents it
+      // without one.
       const label = (MOOD_LABELS[p.mood] || "a new mood").toLowerCase();
       const body = trimmed(p.note, "Tap to see how they're feeling.");
-      return { title: (name) => `${name} feels ${label}`, body };
+      return {
+        title: (name) => `${name} is feeling ${label}`,
+        body,
+        category: "tweli.mood",
+        silent: true,
+      };
     }
 
     case "pings": {
@@ -224,17 +239,22 @@ function buildNotification(type, afterData, beforeData, isCreate) {
       if (p.assignedTo === "me") return null;
 
       if (isCreate) {
+        // RA2: "Anaya set a reminder for you".
         return {
-          title: (name) => `New reminder from ${name}`,
+          title: (name) => `${name} set a reminder for you`,
           body: trimmed(p.title, "A little something to remember 💗"),
+          category: "tweli.reminder",
         };
       }
       // On edits, only announce a completion (false → true).
       const pb = parsePayload(beforeData);
       if (!pb.isCompleted && p.isCompleted) {
+        // RA5: "Anaya got it done" — comes back quietly. No sound, no badge.
         return {
-          title: (name) => `✓ ${name} completed a reminder`,
+          title: (name) => `${name} got it done`,
           body: trimmed(p.title, "a reminder"),
+          category: "tweli.completion",
+          silent: true,
         };
       }
       return null;
@@ -250,18 +270,24 @@ function buildNotification(type, afterData, beforeData, isCreate) {
 
     case "letters": {
       if (!isCreate) return null;
-      // Announce the letter exists; keep the message itself private until opened.
+      // RA7: a letter NEVER previews on the lock screen. Not the message, and
+      // not the "open when…" label either — the comp's body is a fixed
+      // "Sealed until you open it." Anyone glancing at the phone learns that a
+      // letter arrived and nothing more, which is the point of sealing one.
       return {
-        title: (name) => `${name} wrote you a letter 💌`,
-        body: trimmed(p.title, "Open when…"),
+        title: (name) => `${name} sent you a letter`,
+        body: "Sealed until you open it.",
+        category: "tweli.letter",
       };
     }
 
     case "virtualDates": {
       if (!isCreate) return null;
+      // RA9.
       return {
         title: (name) => `${name} planned a date`,
         body: trimmed(p.title, "A little something to look forward to 💞"),
+        category: "tweli.date",
       };
     }
 
