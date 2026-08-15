@@ -26,6 +26,27 @@ final class AuthService: ObservableObject {
     /// happened" on TestFlight builds.
     @Published private(set) var isSigningIn = false
     @Published private(set) var authError: String?
+    /// The underlying failure code, shown verbatim on comp G4 ("Error 1000 ·
+    /// authorization not completed"). Kept separate from `authError` so the
+    /// screen can print a real diagnostic instead of inventing one — a made-up
+    /// code in a support conversation is worse than none.
+    @Published private(set) var authErrorCode: Int?
+    /// Detail line under the G4 headline, e.g. "authorization not completed".
+    @Published private(set) var authErrorDetail: String?
+
+    /// Clears the failure state so G4's "Try again" returns to G1.
+    func dismissAuthError() {
+        authError = nil
+        authErrorCode = nil
+        authErrorDetail = nil
+    }
+
+    /// Record a failure in the shape comp G4 renders.
+    private func failed(_ headline: String, detail: String, code: Int?) {
+        authError = headline
+        authErrorDetail = detail
+        authErrorCode = code
+    }
 
     private let userIdKey = "tweli.auth.appleUserId"
     private let nameKey = "tweli.auth.displayName"
@@ -72,7 +93,7 @@ final class AuthService: ObservableObject {
     /// Handle the button's completion result. On success, exchange Apple's credential
     /// for a Firebase session, then persist the Firebase UID + display name.
     func handleCompletion(_ result: Result<ASAuthorization, Error>) {
-        authError = nil
+        dismissAuthError()
         switch result {
         case .success(let authorization):
             guard let cred = authorization.credential as? ASAuthorizationAppleIDCredential,
@@ -80,7 +101,8 @@ final class AuthService: ObservableObject {
                   let idToken = String(data: tokenData, encoding: .utf8),
                   let rawNonce = currentNonce else {
                 print("[Auth] missing identity token or nonce")
-                authError = "Apple didn't return a sign-in token. Please try again."
+                failed("Couldn't reach Apple",
+                       detail: "Apple didn't return a sign-in token.", code: nil)
                 return
             }
             let fullName = cred.fullName
@@ -89,7 +111,8 @@ final class AuthService: ObservableObject {
                 do {
                     guard let exchange = exchangeCredential else {
                         print("[Auth] credential exchange not wired")
-                        authError = "Sign-in isn't wired up correctly. Please reinstall the app."
+                        failed("Sign-in isn't set up",
+                               detail: "The app is missing its sign-in wiring.", code: nil)
                         isSigningIn = false
                         return
                     }
@@ -97,17 +120,25 @@ final class AuthService: ObservableObject {
                     store(userId: uid, name: name.isEmpty ? fallbackName() : name)
                 } catch {
                     print("[Auth] Firebase credential exchange failed: \(error)")
-                    authError = "Couldn't finish signing in: \(error.localizedDescription)"
+                    failed("Couldn't finish signing in",
+                           detail: error.localizedDescription,
+                           code: (error as NSError).code)
                 }
                 isSigningIn = false
                 currentNonce = nil
             }
         case .failure(let error):
-            // A user-cancelled sheet is not an error worth shouting about.
-            if (error as? ASAuthorizationError)?.code != .canceled {
-                print("[Auth] Sign in with Apple failed: \(error.localizedDescription)")
-                authError = "Sign in with Apple failed: \(error.localizedDescription)"
-            }
+            // Comp G4 covers cancellation and connection loss with one screen and
+            // one reassurance — "Sign-in was cancelled or your connection dropped.
+            // Nothing was created." Cancelling is therefore surfaced, not
+            // swallowed, but the copy stays calm and offers the way back.
+            let ns = error as NSError
+            let cancelled = (error as? ASAuthorizationError)?.code == .canceled
+            print("[Auth] Sign in with Apple failed (\(ns.code)): \(error.localizedDescription)")
+            failed("Couldn't reach Apple",
+                   detail: cancelled ? "authorization not completed"
+                                     : error.localizedDescription,
+                   code: ns.code)
             currentNonce = nil
         }
     }

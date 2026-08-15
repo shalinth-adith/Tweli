@@ -19,36 +19,70 @@
 
 import SwiftUI
 import AuthenticationServices
+import UIKit
 
 struct SignInView: View {
     @EnvironmentObject private var auth: AuthService
     @Environment(\.colorScheme) private var scheme
     @State private var appear = false
 
+    /// Verification hook (DEBUG only, compiled out of every distribution build):
+    /// TWELI_SIGNIN_STATE=signing|failed paints G3 or G4. Apple's sheet cannot be
+    /// driven on a simulator, so these two states are otherwise unreachable for a
+    /// screenshot.
+    private var forcedState: String {
+#if DEBUG
+        ProcessInfo.processInfo.environment["TWELI_SIGNIN_STATE"] ?? ""
+#else
+        ""
+#endif
+    }
+
     var body: some View {
         ZStack {
             TweliGradient.sky(scheme).ignoresSafeArea()
             glows
 
-            GeometryReader { geo in
-                ZStack(alignment: .bottom) {
-                    thread
-                        .frame(height: 90)
-                        .padding(.horizontal, 28)
-                        .position(x: geo.size.width / 2, y: 165)
-
-                    VStack(alignment: .leading, spacing: 0) {
-                        headline
-                        actions.padding(.top, 30)
-                        legal.padding(.top, 14)
-                    }
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 26)
-                }
+            // G3 and G4 take the whole screen rather than appearing as a line
+            // under the button. Both are moments the user is waiting on, and a
+            // footnote is easy to miss while staring at an Apple sheet.
+            if auth.isSigningIn || forcedState == "signing" {
+                SigningInState()                                   // G3
+                    .transition(.opacity)
+            } else if auth.authError != nil || forcedState == "failed" {
+                SignInFailedState(forced: forcedState == "failed")  // G4
+                    .transition(.opacity)
+            } else {
+                entryState                                         // G1
+                    .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: auth.isSigningIn)
+        .animation(.easeInOut(duration: 0.25), value: auth.authError)
         .onAppear {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.78).delay(0.15)) { appear = true }
+        }
+    }
+
+    /// G1 — the front door.
+    private var entryState: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                // Comp G1 stacks a few real-looking reminders behind the copy,
+                // so the promise ("one reminder, both phones") is shown rather
+                // than only claimed.
+                remindersPreview
+                    .padding(.horizontal, 28)
+                    .position(x: geo.size.width / 2, y: geo.size.height * 0.27)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    headline
+                    actions.padding(.top, 30)
+                    legal.padding(.top, 14)
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 26)
+            }
         }
     }
 
@@ -97,6 +131,73 @@ struct SignInView: View {
             .foregroundStyle(tint.opacity(0.85))
     }
 
+    // MARK: - G1 · what the app does, shown not claimed
+
+    /// Comp G1 layers four reminder cards behind the headline. These are
+    /// illustrative — nobody is signed in, so there is no real data to draw —
+    /// which is why they are visibly a stack of examples rather than a live
+    /// list, and why nothing here is ever written to storage.
+    private var remindersPreview: some View {
+        VStack(spacing: 8) {
+            previewCard(who: "You", tint: Color.twAccent,
+                        title: "Water her plants", meta: "done 6:40 PM", done: true)
+            previewCard(who: "Anaya", tint: Color.twAccent2,
+                        title: "Call me after work", meta: "7:00 PM her time")
+            previewCard(who: nil, tint: Color.twAccent2,
+                        title: "Take your tablet", meta: "every night, 9:00")
+            previewCard(who: nil, tint: Color.twAccent,
+                        title: "Our anniversary", meta: "in 3 days")
+        }
+        .opacity(appear ? 1 : 0)
+        .offset(y: appear ? 0 : -10)
+        // Decorative: VoiceOver should hear the promise in the headline, not
+        // four fictional reminders read out as if they were the user's.
+        .accessibilityHidden(true)
+    }
+
+    private func previewCard(who: String?, tint: Color,
+                             title: String, meta: String, done: Bool = false) -> some View {
+        HStack(spacing: 11) {
+            Circle()
+                .strokeBorder(done ? tint : tint.opacity(0.5), lineWidth: 1.6)
+                .background(Circle().fill(done ? tint.opacity(0.9) : .clear))
+                .frame(width: 18, height: 18)
+                .overlay {
+                    if done {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundStyle(.white)
+                    }
+                }
+
+            VStack(alignment: .leading, spacing: 1) {
+                if let who {
+                    Text(who)
+                        .font(.system(size: 10, weight: .bold))
+                        .textCase(.uppercase)
+                        .tracking(0.8)
+                        .foregroundStyle(tint)
+                }
+                Text(title)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(Color.twInk.opacity(done ? 0.45 : 1))
+                    .strikethrough(done, color: Color.twInkTertiary)
+            }
+            Spacer(minLength: 6)
+            Text(meta)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color.twInkTertiary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(Color.twElevated.opacity(0.75),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.twHairline, lineWidth: 1)
+        }
+    }
+
     // MARK: - Headline
 
     private var headline: some View {
@@ -107,14 +208,14 @@ struct SignInView: View {
                 .tracking(6)
                 .foregroundStyle(Color.twInkTertiary)
 
-            Text("Closer than\nthe map says.")
-                .font(.system(size: 36, weight: .heavy))
+            Text("Remind us.")
+                .font(.system(size: 40, weight: .heavy))
                 .tracking(-0.8)
                 .lineSpacing(2)
                 .foregroundStyle(Color.twInk)
                 .padding(.top, 12)
 
-            Text("One quiet place for the two of you — moods, letters, and the little reminders that keep a long distance short.")
+            Text("One reminder, both phones. Sign in and we'll start your thread.")
                 .font(.system(size: 15))
                 .lineSpacing(3)
                 .foregroundStyle(Color.twInkSecondary)
@@ -141,22 +242,6 @@ struct SignInView: View {
             .frame(height: 54)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .disabled(auth.isSigningIn)
-
-            if auth.isSigningIn {
-                HStack(spacing: 8) {
-                    ProgressView()
-                    Text("Finishing sign-in…")
-                        .font(.footnote)
-                        .foregroundStyle(Color.twInkSecondary)
-                }
-                .frame(maxWidth: .infinity)
-            } else if let error = auth.authError {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.footnote)
-                    .foregroundStyle(Color.twAccentInk)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-            }
 
 #if DEBUG
             // Developer-only, and absent from every distribution build. Signs in
@@ -218,4 +303,129 @@ private struct ThreadArc: View {
             .frame(width: 9, height: 9)
             .shadow(color: color.opacity(0.7), radius: 7)
     }
+}
+
+// MARK: - G3 · Signing in
+
+/// Comp G3. A whole screen rather than a spinner beside the button: the user is
+/// looking at Apple's sheet when this begins, and needs to find their place when
+/// they come back.
+private struct SigningInState: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var draw = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            // maxWidth here, not on the enclosing VStack. A shape given only a
+            // height takes whatever width it is offered, and a `.frame` on the
+            // parent applied after the fact comes too late to widen it — the
+            // arc ends up crushed into the left of the screen.
+            ThreadArc(progress: draw ? 1 : 0)
+                .frame(maxWidth: .infinity)
+                .frame(height: 64)
+                .padding(.horizontal, 46)
+
+            Text("Signing you in")
+                .font(.system(size: 26, weight: .heavy))
+                .tracking(-0.5)
+                .foregroundStyle(Color.twInk)
+                .padding(.top, 28)
+
+            Text("Setting up your side of the thread…")
+                .font(.system(size: 14.5))
+                .foregroundStyle(Color.twInkSecondary)
+                .padding(.top, 8)
+
+            ProgressView().padding(.top, 24)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .onAppear {
+            guard !reduceMotion else { draw = true; return }
+            withAnimation(.easeInOut(duration: 1.3).repeatForever(autoreverses: true)) {
+                draw = true
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Signing you in")
+    }
+}
+
+// MARK: - G4 · Sign-in failed
+
+/// Comp G4. Names what happened, prints the real code so a support message can
+/// be specific, and reassures that nothing was half-created — then offers the
+/// two things that actually help.
+private struct SignInFailedState: View {
+    @EnvironmentObject private var auth: AuthService
+    /// True when painted by the DEBUG capture hook rather than a real failure,
+    /// so the diagnostic line has something representative to show.
+    var forced = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            ZStack {
+                Circle().fill(Color.twWarn.opacity(0.16)).frame(width: 78, height: 78)
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(Color.twWarnInk)
+            }
+
+            Text(auth.authError ?? "Couldn't reach Apple")
+                .font(.system(size: 26, weight: .heavy))
+                .tracking(-0.5)
+                .foregroundStyle(Color.twInk)
+                .multilineTextAlignment(.center)
+                .padding(.top, 22)
+
+            Text("Sign-in was cancelled or your connection dropped.\nNothing was created.")
+                .font(.system(size: 14.5))
+                .lineSpacing(3)
+                .foregroundStyle(Color.twInkSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+
+            if let line = diagnostic {
+                Text(line)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Color.twInkQuaternary)
+                    .padding(.top, 14)
+            }
+
+            Spacer()
+
+            VStack(spacing: 10) {
+                BrandCTA(title: "Try again", showsArrow: false) { auth.dismissAuthError() }
+
+                Link(destination: URL(string: UIApplication.openSettingsURLString)!) {
+                    Text("Check your connection")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.twAccent2)
+                        .frame(height: 36)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 26)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// "Error 1000 · authorization not completed" — only the parts we actually
+    /// know. Inventing a code would make a support conversation worse, not better.
+    private var diagnostic: String? {
+        if forced { return "Error 1000 · authorization not completed" }
+        let code = auth.authErrorCode.map { "Error \($0)" }
+        let detail = auth.authErrorDetail
+        return [code, detail].compactMap { $0 }.joined(separator: " · ").nilWhenEmpty
+    }
+}
+
+private extension String {
+    var nilWhenEmpty: String? { isEmpty ? nil : self }
 }

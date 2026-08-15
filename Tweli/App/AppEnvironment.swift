@@ -33,6 +33,7 @@ enum AppEnvironment {
     /// on the profile flow (X1–X6) or the join screen (J1–J5) — neither of which
     /// is reachable once everything is marked done.
     private enum Stage: String {
+        case signin    // tutorial done, NOT signed in                     → G1/G3/G4
         case profile   // signed in, tutorial done, profile flow NOT done  → X1–X6
         case room      // profile done, no space yet                       → RoomSetup / J1–J5
         case tabs      // everything done, empty space                     → MainTabView
@@ -62,6 +63,19 @@ enum AppEnvironment {
         // them, so a stale `aboutYouDone` silently skips the screen under test.
         // Authoritative writes make each launch independent of history.
         d.set(true, forKey: TutorialGate.key)
+
+        // `signin` stops one step earlier than every other stage: the tutorial is
+        // done but there is no session, which is the only way to reach G1/G3/G4.
+        // Clearing the id matters as much as not setting it — a session left by a
+        // previous launch would route straight past the screen under test.
+        guard stage != .signin else {
+            d.removeObject(forKey: "tweli.auth.appleUserId")
+            d.set(false, forKey: "tweli.aboutYouDone")
+            d.set(false, forKey: "tweli.roomSetupComplete")
+            d.removeObject(forKey: "tweli.coupleSpace")
+            return
+        }
+
         if d.string(forKey: "tweli.auth.appleUserId") == nil {
             d.set("dev-\(UUID().uuidString)", forKey: "tweli.auth.appleUserId")
         }
