@@ -52,9 +52,9 @@ for the reviewer.
 > space. To see it populated, use one of these invite codes at the
 > "Connect with your partner" step:
 >
-> * REVW-2001
-> * REVW-2002
-> * REVW-2003
+> * RVW-201
+> * RVW-202
+> * RVW-203
 >
 > Each code joins a demo space that already contains a partner ("Anaya"),
 > her current mood, two open-when letters, two shared reminders and a

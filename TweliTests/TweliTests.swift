@@ -17,20 +17,23 @@ import Foundation
 struct TweliTests {
 
     // 1 — HAPPY: pair codes normalize to a canonical uppercase form and round-trip
-    // through the TWLI-4821 display format the comp (A5/A6) specifies.
-    @Test("happy: pair-code normalization + TWLI-4821 format contract")
+    // through the ABC-123 display format the comps specify.
+    //
+    // Six characters, not eight. Every code that has ever existed in this
+    // project is six (FECY63, HW5YEC, K8779U…); an eight-character format lived
+    // in the source for a while without ever minting one, and the entry screen
+    // built around it rejected every invite anyone actually held.
+    @Test("happy: pair-code normalization + ABC-123 format contract")
     func pairCodeNormalizationContract() {
         // Hyphens, spaces and lowercase all collapse to the stored document id.
-        // (The comp's literal "TWLI" isn't usable — I and L are excluded as
-        // digit look-alikes — so the shape is exercised with a mintable code.)
-        #expect(FirebaseService.normalizePairCode("twnk-4821") == "TWNK4821")
-        #expect(FirebaseService.normalizePairCode("TWNK 4821") == "TWNK4821")
-        #expect(FirebaseService.normalizePairCode("twnk-4821").count == FirebaseService.codeLength)
+        #expect(FirebaseService.normalizePairCode("twn-482") == "TWN482")
+        #expect(FirebaseService.normalizePairCode("TWN 482") == "TWN482")
+        #expect(FirebaseService.normalizePairCode("twn-482").count == FirebaseService.codeLength)
 
-        // Display form re-inserts the hyphen after the four letters.
-        #expect(FirebaseService.formatPairCode("twnk4821") == "TWNK-4821")
+        // Display form re-inserts the hyphen down the middle.
+        #expect(FirebaseService.formatPairCode("twn482") == "TWN-482")
         // Normalize ∘ format is the identity on the stored form.
-        #expect(FirebaseService.normalizePairCode(FirebaseService.formatPairCode("TWNK4821")) == "TWNK4821")
+        #expect(FirebaseService.normalizePairCode(FirebaseService.formatPairCode("TWN482")) == "TWN482")
 
         // Letters exclude the glyphs that read as digits; digits are unambiguous
         // BECAUSE O/I/L are absent from the letter set.
@@ -39,11 +42,13 @@ struct TweliTests {
         }
         let alphabet = FirebaseService.codeAlphabet
         #expect(alphabet.allSatisfy { $0.isUppercase || $0.isNumber })
-        #expect(FirebaseService.normalizePairCode("TWNK4821").allSatisfy { alphabet.contains($0) })
+        #expect(FirebaseService.normalizePairCode("TWN482").allSatisfy { alphabet.contains($0) })
 
-        // Legacy 6-character invites must still be enterable, alongside new ones.
+        // Six is the only accepted length. Real production codes validate; the
+        // eight-character shape does not, because no such code can resolve.
         #expect(FirebaseService.isPlausiblePairCode("7GK4PB"))
-        #expect(FirebaseService.isPlausiblePairCode("TWNK-4821"))
+        #expect(FirebaseService.isPlausiblePairCode("HW5-YEC"))
+        #expect(!FirebaseService.isPlausiblePairCode("TWNK-4821"))
         #expect(!FirebaseService.isPlausiblePairCode("TWNK"))
     }
 

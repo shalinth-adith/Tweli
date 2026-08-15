@@ -247,17 +247,19 @@ struct PartnerIdentityTests {
     /// — tap to join." and "2 more characters to go" rendered together, button
     /// live, two cells empty.
     @MainActor
-    @Test("a legacy six-character code counts as complete")
-    func legacySixCharCodeIsComplete() {
-        #expect(FirebaseService.isPlausiblePairCode("REVW20"))
-        #expect(FirebaseService.isPlausiblePairCode("REVW2001"))
+    @Test("a six-character code counts as complete")
+    func sixCharCodeIsComplete() {
+        #expect(FirebaseService.isPlausiblePairCode("RVW201"))
+        // Eight characters is not a format that ever existed in the wild, and
+        // accepting it would let someone submit a code that cannot resolve.
+        #expect(!FirebaseService.isPlausiblePairCode("REVW2001"))
     }
 
     /// …and the lengths in between are not, so the helper line still has a job.
     @MainActor
     @Test("partial codes are not complete")
     func partialCodesAreIncomplete() {
-        for partial in ["", "R", "REV", "REVW2", "REVW200"] {
+        for partial in ["", "R", "RV", "RVW2", "RVW20"] {
             #expect(!FirebaseService.isPlausiblePairCode(partial),
                     "\(partial) should not be submittable")
         }

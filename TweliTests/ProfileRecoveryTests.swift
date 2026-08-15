@@ -155,3 +155,171 @@ struct ProfileRecoveryTests {
         #expect(!s.hasCompletedAboutYou)
     }
 }
+
+// MARK: - Choosing WHICH space to recover into
+
+/// The bug this covers, reported from a real device: reinstall, sign in, and
+/// land in "another new group which I haven't even created".
+///
+/// The user was in three spaces — a real two-person one with 58 location
+/// records and four letters, an empty solo leftover, and one they had left.
+/// `restoreSpaceMembership` used `.limit(to: 1)` with no ordering, so Firestore
+/// returned an arbitrary document and it picked the empty leftover.
+///
+/// `.limit(to: 1)` encoded an assumption that a person belongs to one space.
+/// The two-person cap makes that feel true, but the cap is per space, not per
+/// user: create one, leave, join another, and you are in several.
+@Suite("Space selection on recovery")
+struct SpaceSelectionTests {
+
+    /// Mirrors `FirebaseService.bestSpace`. The real one takes
+    /// `QueryDocumentSnapshot`, which cannot be constructed outside Firestore —
+    /// so the ordering rule is restated here over the same fields. Keep the two
+    /// in step; the rule is what matters, and it is short by design.
+    private struct Space {
+        let id: String
+        let members: [String]
+        let updatedAt: Date
+        let leftBy: String?
+    }
+
+    private func best(_ spaces: [Space], uid: String) -> Space? {
+        let live = spaces.filter { $0.members.contains(uid) }
+        return live.max { a, b in
+            let pa = a.members.count >= 2, pb = b.members.count >= 2
+            if pa != pb { return !pa }
+            return a.updatedAt < b.updatedAt
+        }
+    }
+
+    private let me = "NZG0jEcOPS"
+    private let them = "vD0LovrjD3"
+
+    /// The exact shape of the production data that caused the report.
+    @Test("the paired space wins over an empty leftover")
+    func pairedSpaceWins() throws {
+        let spaces = [
+            // The empty leftover — deliberately the MOST recently updated, which
+            // is what makes the bug deterministic rather than luck.
+            Space(id: "rG5RBTUk", members: [me],
+                  updatedAt: Date(timeIntervalSinceReferenceDate: 900), leftBy: nil),
+            Space(id: "ERSgfMCd", members: [me, them],
+                  updatedAt: Date(timeIntervalSinceReferenceDate: 100), leftBy: nil),
+        ]
+        let chosen = try #require(best(spaces, uid: me))
+        #expect(chosen.id == "ERSgfMCd", "recovered into the empty leftover again")
+    }
+
+    /// A space they walked out of is not a candidate — they are no longer in
+    /// `memberUids`, which is also how the query itself filters.
+    @Test("a space you left is never chosen")
+    func leftSpaceIsSkipped() throws {
+        let spaces = [
+            Space(id: "3vc7wUhw", members: [],
+                  updatedAt: Date(timeIntervalSinceReferenceDate: 999), leftBy: me),
+            Space(id: "ERSgfMCd", members: [me, them],
+                  updatedAt: Date(timeIntervalSinceReferenceDate: 1), leftBy: nil),
+        ]
+        let chosen = try #require(best(spaces, uid: me))
+        #expect(chosen.id == "ERSgfMCd")
+    }
+
+    /// Among equals, the one they last used.
+    @Test("two solo spaces resolve to the most recent")
+    func mostRecentSoloWins() throws {
+        let spaces = [
+            Space(id: "older", members: [me],
+                  updatedAt: Date(timeIntervalSinceReferenceDate: 10), leftBy: nil),
+            Space(id: "newer", members: [me],
+                  updatedAt: Date(timeIntervalSinceReferenceDate: 20), leftBy: nil),
+        ]
+        #expect(try #require(best(spaces, uid: me)).id == "newer")
+    }
+
+    /// Two paired spaces shouldn't happen, but if they do the tie-break is
+    /// still recency rather than whatever Firestore returns first.
+    @Test("two paired spaces resolve to the most recent")
+    func mostRecentPairedWins() throws {
+        let spaces = [
+            Space(id: "old", members: [me, them],
+                  updatedAt: Date(timeIntervalSinceReferenceDate: 10), leftBy: nil),
+            Space(id: "new", members: [me, "someoneElse"],
+                  updatedAt: Date(timeIntervalSinceReferenceDate: 20), leftBy: nil),
+        ]
+        #expect(try #require(best(spaces, uid: me)).id == "new")
+    }
+
+    @Test("no memberships means nothing to recover")
+    func noMembershipsRecoversNothing() {
+        #expect(best([], uid: me) == nil)
+        #expect(best([Space(id: "theirs", members: [them],
+                            updatedAt: .now, leftBy: nil)], uid: me) == nil)
+    }
+
+    /// The single-space case must keep working — it is the common one.
+    @Test("one membership is chosen directly")
+    func singleMembership() throws {
+        let only = Space(id: "only", members: [me, them], updatedAt: .now, leftBy: nil)
+        #expect(try #require(best([only], uid: me)).id == "only")
+    }
+}
+
+// MARK: - Pair-code format
+
+/// Every code that has ever existed in this project is six characters —
+/// FECY63, FZ48D3, HW5YEC, K8779U. An eight-character format lived in the
+/// source for a while and never minted one, so an eight-cell entry screen
+/// rejected every invite anyone actually held.
+@MainActor
+@Suite("Pair code format")
+struct PairCodeFormatTests {
+
+    @Test("codes are six characters")
+    func lengthIsSix() {
+        #expect(FirebaseService.codeLength == 6)
+        for _ in 0..<50 {
+            #expect(FirebaseService.makeCode().count == 6)
+        }
+    }
+
+    /// The real codes from production must all still be enterable.
+    @Test("every code in production validates")
+    func productionCodesValidate() {
+        for code in ["FECY63", "FZ48D3", "HW5YEC", "K8779U"] {
+            #expect(FirebaseService.isPlausiblePairCode(code), "\(code) rejected")
+        }
+    }
+
+    @Test("eight characters is no longer accepted")
+    func eightIsRejected() {
+        #expect(!FirebaseService.isPlausiblePairCode("REVW2001"))
+    }
+
+    @Test("display splits down the middle")
+    func displaySplit() {
+        #expect(FirebaseService.formatPairCode("HW5YEC") == "HW5-YEC")
+        #expect(FirebaseService.formatPairCode("hw5-yec") == "HW5-YEC")
+    }
+
+    /// A minted code must survive the round trip a user puts it through:
+    /// formatted for sharing, typed back with the hyphen, normalised again.
+    @Test("minted codes round-trip through format and normalize")
+    func roundTrip() {
+        for _ in 0..<50 {
+            let code = FirebaseService.makeCode()
+            let shown = FirebaseService.formatPairCode(code)
+            #expect(FirebaseService.normalizePairCode(shown) == code)
+            #expect(FirebaseService.isPlausiblePairCode(shown))
+        }
+    }
+
+    /// Ambiguous glyphs stay out — I, L and O read as 1 and 0 when someone is
+    /// copying a code off another person's screen.
+    @Test("minted codes avoid characters that misread")
+    func noAmbiguousCharacters() {
+        for _ in 0..<50 {
+            let code = FirebaseService.makeCode()
+            #expect(!code.contains("I") && !code.contains("L") && !code.contains("O"))
+        }
+    }
+}

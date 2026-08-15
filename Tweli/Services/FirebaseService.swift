@@ -8,7 +8,7 @@
 //  membership (max two Firebase UIDs) plus six item subcollections. Each item is
 //  stored as a "thin payload" document — the Codable model JSON-encoded into a
 //  single `payload` string field — which keeps the mapping to our models tiny and
-//  identical to the CloudKit port it replaces. An 8-char pair code
+//  identical to the CloudKit port it replaces. A 6-char pair code
 //  (`pairCodes/{code}`, code == doc id) is the whole invite: it carries the
 //  spaceId, so redeeming is a direct getDocument with no queryable index.
 //
@@ -249,14 +249,23 @@ final class FirebaseService: ObservableObject {
     /// One deviation: the comp's literal example "TWLI" contains I and L, which
     /// are excluded above because they are unreadable next to 1. So that exact
     /// string can never be minted, and the UI hint shows the shape
-    /// ("ABCD-1234") rather than an example the app could never issue.
-    static let codeLength = 8
+    /// ("ABC-123") rather than an example the app could never issue.
+    /// SIX. Every pair code that has ever existed in this project is six
+    /// characters (FECY63, HW5YEC, K8779U…), and the comps draw six boxes. An
+    /// eight-character format was introduced by a design rewrite and never
+    /// minted a single real code — while an eight-cell entry screen silently
+    /// rejects every invite anyone actually holds.
+    static let codeLength = 6
 
     /// Internal (not private) so the test suite can assert that every minted
     /// code round-trips through normalize/format.
+    ///
+    /// Three letters then three digits keeps the halves readable while staying
+    /// six long: 23³ × 10³ ≈ 12 million, which is ample for invites that expire
+    /// in 48 hours and are single-use.
     static func makeCode() -> String {
-        let letters = (0..<4).map { _ in codeLetters.randomElement()! }
-        let digits = (0..<4).map { _ in codeDigits.randomElement()! }
+        let letters = (0..<3).map { _ in codeLetters.randomElement()! }
+        let digits = (0..<3).map { _ in codeDigits.randomElement()! }
         return String(letters + digits)
     }
 
@@ -266,21 +275,21 @@ final class FirebaseService: ObservableObject {
         raw.uppercased().filter { codeAlphabet.contains($0) }
     }
 
-    /// Display form — "TWLI4821" → "TWLI-4821". Codes minted before this format
-    /// (6 characters, no split) are returned unchanged.
+    /// Display form — "HW5YEC" → "HW5-YEC". Split down the middle so the two
+    /// halves are easy to read aloud, which is how most invites travel.
     static func formatPairCode(_ raw: String) -> String {
         let code = normalizePairCode(raw)
         guard code.count == codeLength else { return code }
-        let i = code.index(code.startIndex, offsetBy: 4)
+        let i = code.index(code.startIndex, offsetBy: 3)
         return "\(code[..<i])-\(code[i...])"
     }
 
-    /// A code is enterable once it has a plausible length. Both the current
-    /// 8-character format and the legacy 6-character one are accepted, so an
-    /// invite sent before the change still works.
+    /// A code is enterable once it is exactly six characters. There is no
+    /// second accepted length any more: the eight-character format never
+    /// reached a user, so accepting it would only let someone submit a code
+    /// that cannot exist.
     static func isPlausiblePairCode(_ raw: String) -> Bool {
-        let n = normalizePairCode(raw).count
-        return n == codeLength || n == 6
+        normalizePairCode(raw).count == codeLength
     }
 
     // MARK: - Notification preferences (comp V3)
@@ -359,16 +368,64 @@ final class FirebaseService: ObservableObject {
     ///
     /// Returns nil when there is nothing to recover — including when a spaceId
     /// is already cached, since then there is nothing lost to find.
+    /// Choose which space to recover into when the user belongs to several.
+    ///
+    /// The order is deliberate, and it is about which space a person would
+    /// actually name if you asked them:
+    ///
+    ///   1. Skip anything they have left — `leftBy` is theirs and they are no
+    ///      longer a member. Being recovered into a space you walked out of is
+    ///      worse than not being recovered at all.
+    ///   2. Prefer a space that has TWO people. A one-person space is either
+    ///      abandoned or not yet joined; the paired one is the relationship.
+    ///   3. Then most recently active, by `updatedAt`. Among equals, the one
+    ///      they last used.
+    ///
+    /// Static and pure so it can be tested without Firestore — the selection is
+    /// the part that was wrong, and it deserves to be checkable.
+    nonisolated static func bestSpace(from documents: [QueryDocumentSnapshot],
+                                      uid: String) -> QueryDocumentSnapshot? {
+        func members(_ d: QueryDocumentSnapshot) -> [String] {
+            d.data()["memberUids"] as? [String] ?? []
+        }
+        func updatedAt(_ d: QueryDocumentSnapshot) -> Date {
+            (d.data()["updatedAt"] as? Timestamp)?.dateValue() ?? .distantPast
+        }
+
+        let live = documents.filter { d in
+            let m = members(d)
+            guard m.contains(uid) else { return false }        // stale index entry
+            if (d.data()["leftBy"] as? String) == uid, !m.contains(uid) { return false }
+            return true
+        }
+
+        return live.max { a, b in
+            let pairedA = members(a).count >= 2, pairedB = members(b).count >= 2
+            if pairedA != pairedB { return !pairedA }          // paired wins
+            return updatedAt(a) < updatedAt(b)                 // then most recent
+        }
+    }
+
     func restoreSpaceMembership() async -> RecoveredSpace? {
         guard !isDevOrOffline, let uid = currentUid, spaceId == nil else { return nil }
         do {
+            // NO `.limit(to: 1)`. That assumed one membership per person, which
+            // the two-person cap makes *feel* true — but the cap is per space,
+            // not per user. Anyone who has created a space, left it, and joined
+            // another is in several, and an unordered single-document query
+            // returns an arbitrary one. Observed live: a user with a real
+            // two-person space plus an empty leftover was recovered into the
+            // leftover, which reads as "the app put me in a group I never made".
             let snap = try await db.collection("spaces")
                 .whereField("memberUids", arrayContains: uid)
-                .limit(to: 1)
                 .getDocuments()
-            guard let doc = snap.documents.first else {
+
+            guard let doc = Self.bestSpace(from: snap.documents, uid: uid) else {
                 log("no existing space to recover for uid=\(uid)")
                 return nil
+            }
+            if snap.documents.count > 1 {
+                log("recovery: \(snap.documents.count) memberships, chose \(doc.documentID)")
             }
             let data = doc.data()
             let members = data["memberUids"] as? [String] ?? []

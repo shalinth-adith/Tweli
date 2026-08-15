@@ -55,7 +55,8 @@ const daysAgo = (n) => new Date(Date.now() - n * 86400000);
 // The demo couple. Codes use the app's own alphabet: four letters (no I/L/O)
 // then four digits, stored without the display hyphen.
 // ---------------------------------------------------------------------------
-const CODES = ["REVW2001", "REVW2002", "REVW2003"];
+// Six characters, matching FirebaseService.codeLength and every real code.
+const CODES = ["RVW201", "RVW202", "RVW203"];
 const PARTNER_NAME = "Anaya";
 const PARTNER_TZ = "Asia/Dubai";
 const SPACE_TITLE = "Our space";
@@ -267,12 +268,12 @@ async function main() {
   console.log("Seeding demo spaces...\n");
   for (let i = 0; i < CODES.length; i += 1) {
     const r = await seedOne(db, i);
-    const display = `${r.code.slice(0, 4)}-${r.code.slice(4)}`;
+    const display = `${r.code.slice(0, 3)}-${r.code.slice(3)}`;
     console.log(`  ${display}  ->  ${r.spaceId}  (${r.items} items, partner "${PARTNER_NAME}")`);
   }
 
   console.log("\nDone. Put these codes in the App Review notes:");
-  console.log("  " + CODES.map((c) => `${c.slice(0, 4)}-${c.slice(4)}`).join("   "));
+  console.log("  " + CODES.map((c) => `${c.slice(0, 3)}-${c.slice(3)}`).join("   "));
 }
 
 main().then(() => process.exit(0)).catch((err) => {

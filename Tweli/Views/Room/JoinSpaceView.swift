@@ -16,15 +16,14 @@
 //  Two deliberate departures from the comp, both because the comp was drawn
 //  against an older code format than the one the app actually mints:
 //
-//    - The comp shows SIX cells and says "six characters". Codes are EIGHT
-//      characters, `ABCD-1234` (FirebaseService.codeLength), so this draws eight
-//      split 4 + 4 by a hyphen. Six cells would reject every code ever issued.
+//    - Codes are SIX characters, split 3 + 3 by a hyphen, matching both the comp
+//      and every code that has ever existed in the project (FECY63, HW5YEC…).
+//      An eight-character format briefly existed in the source but never minted
+//      a real code; an eight-cell screen rejected every invite anyone held.
 //    - The comp's J5 says "codes last seven days". `publishPairCode` expires them
 //      after 48 hours, which is also what the landing page and privacy policy
 //      say, so the copy here says 48 hours.
 //
-//  Legacy 6-character codes still redeem, so an invite sent before the format
-//  change continues to work.
 //
 
 import SwiftUI
@@ -166,7 +165,7 @@ struct JoinSpaceView: View {
     private var introCopy: String {
         hasError
             ? "Double-check the code with your partner and try again."
-            : "Eight characters from the invite your partner sent you."
+            : "Six characters from the invite your partner sent you."
     }
 
     /// J1 hint → J3 confirmation → J4 error, in one slot so the layout does not
@@ -188,7 +187,7 @@ struct JoinSpaceView: View {
             }
             .foregroundStyle(Color.twSuccess)
         } else {
-            Text("Codes look like ABCD-1234")
+            Text("Codes look like ABC-123")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.twInkTertiary)
         }
@@ -212,7 +211,7 @@ struct JoinSpaceView: View {
             HStack(spacing: 5) {
                 let chars = Array(normalized)
                 ForEach(0..<tileCount, id: \.self) { i in
-                    if i == 4 {
+                    if i == tileCount / 2 {
                         Capsule()
                             .fill(Color.twInkTertiary.opacity(0.35))
                             .frame(width: 9, height: 3)
@@ -341,7 +340,7 @@ struct JoinSpaceView: View {
 #if DEBUG
     /// Verification hooks (DEBUG only, compiled out of every distribution build):
     ///
-    ///   TWELI_JOIN_CODE=ABCD1234   pre-fills the cells (J2 partial, J3 complete)
+    ///   TWELI_JOIN_CODE=RVW201     pre-fills the cells (J2 partial, J3 complete)
     ///   TWELI_JOIN_ERROR=wrong     paints J4
     ///   TWELI_JOIN_ERROR=expired   paints J5
     ///
