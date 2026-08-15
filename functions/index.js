@@ -15,6 +15,7 @@
 
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onRequest } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
@@ -585,3 +586,91 @@ exports.leaveSpace = onRequest(async (req, res) => {
     res.status(500).json({ error: "Could not leave the space." });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Nightly sweep of dead spaces.
+//
+// A space that nobody can reach still costs storage and still holds whatever
+// was written in it. Two ways one becomes unreachable: everybody left (zero
+// members), or it was created and never paired and then abandoned.
+//
+// The rule, set by the product owner: FEWER THAN TWO MEMBERS and untouched for
+// five days — delete the space and everything in it.
+//
+// This is destructive and irreversible, so three safeguards are built in:
+//
+//   1. DRY_RUN. While true the sweep only reports what it WOULD delete.
+//      Deployed in this mode deliberately; flip the constant and redeploy once
+//      the logs look right.
+//   2. Demo spaces are exempt. review-demo-* are one-member by design (a
+//      reviewer is the second), and sweeping them would break App Review
+//      access weeks after submission with no visible cause.
+//   3. A space with no `updatedAt` is skipped rather than treated as ancient.
+//      Absent is not the same as old, and guessing costs someone their letters.
+//
+// Note the honest trade this rule makes: a one-member space is also what
+// somebody waiting for their partner to install the app looks like. Five days
+// of not opening Tweli while waiting is ordinary, and their letters go with it.
+// That was raised and chosen deliberately.
+// ---------------------------------------------------------------------------
+
+/** Report-only until this is flipped to false and redeployed. */
+const SWEEP_DRY_RUN = true;
+const SWEEP_IDLE_DAYS = 5;
+
+exports.sweepInactiveSpaces = onSchedule(
+  { schedule: "every day 03:30", timeZone: "Asia/Kolkata", region: "asia-south1" },
+  async () => {
+    const db = getFirestore();
+    const cutoff = Date.now() - SWEEP_IDLE_DAYS * 86400000;
+
+    const snap = await db.collection("spaces").get();
+    const doomed = [];
+
+    for (const doc of snap.docs) {
+      // Safeguard 2 — never sweep the App Review demo spaces.
+      if (doc.id.startsWith("review-demo-")) continue;
+
+      const data = doc.data() || {};
+      const members = Array.isArray(data.memberUids) ? data.memberUids : [];
+      if (members.length >= 2) continue;              // a live couple
+
+      // Safeguard 3 — no timestamp means unknown, not ancient.
+      const updated = data.updatedAt && data.updatedAt.toDate
+        ? data.updatedAt.toDate().getTime() : null;
+      if (updated === null || updated > cutoff) continue;
+
+      let items = 0;
+      for (const type of ITEM_TYPES) {
+        const c = await doc.ref.collection(type).count().get();
+        items += c.data().count;
+      }
+      const idleDays = ((Date.now() - updated) / 86400000).toFixed(1);
+      doomed.push({ id: doc.id, members: members.length, idleDays, items });
+    }
+
+    if (doomed.length === 0) {
+      console.log("sweep: nothing to remove");
+      return;
+    }
+
+    if (SWEEP_DRY_RUN) {
+      console.log(`sweep [DRY RUN] would delete ${doomed.length} space(s):`);
+      doomed.forEach((d) =>
+        console.log(`  ${d.id} · ${d.members} member(s) · idle ${d.idleDays}d · ${d.items} item(s)`));
+      console.log("sweep [DRY RUN] nothing was deleted. Set SWEEP_DRY_RUN=false to enable.");
+      return;
+    }
+
+    for (const d of doomed) {
+      const ref = db.collection("spaces").doc(d.id);
+      let removed = 0;
+      for (const type of ITEM_TYPES) {
+        removed += await deleteQueryInBatches(db, ref.collection(type));
+      }
+      await ref.delete();
+      console.log(`sweep: deleted ${d.id} (${removed} items, idle ${d.idleDays}d)`);
+    }
+    console.log(`sweep: removed ${doomed.length} space(s)`);
+  }
+);
