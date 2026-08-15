@@ -432,12 +432,18 @@ final class AppViewModel: ObservableObject {
     /// Push the whole profile — name AND the bio/city/birthday the X1–X6 flow
     /// collects. Without this the last three are written to UserDefaults and
     /// never leave the device, which makes X6's "this is what they see" false.
-    func pushMyProfileToSpace() {
+    /// - Parameter userEdited: true when this comes from a screen the user just
+    ///   filled in, which is the only context where an empty field means "remove
+    ///   it" rather than "this device doesn't happen to know". Incidental pushes
+    ///   leave stored values alone — see `updateMyProfileDetails(allowClearing:)`.
+    func pushMyProfileToSpace(userEdited: Bool = true) {
         let me = coupleSpaceService.currentUser
         Task {
             await cloud.updateMyMemberName(me.displayName)
             await cloud.updateMyTimezone()
-            await cloud.updateMyProfileDetails(bio: me.bio, city: me.city, birthday: me.birthday)
+            await cloud.updateMyProfileDetails(bio: me.bio, city: me.city,
+                                               birthday: me.birthday,
+                                               allowClearing: userEdited)
         }
     }
 
@@ -474,6 +480,14 @@ final class AppViewModel: ObservableObject {
         coupleSpaceService.restoreFromRecoveredSpace(title: recovered.title,
                                                      isOwner: recovered.isOwner,
                                                      partnerName: recovered.partnerName)
+        // Identity, not just membership. Without this a reinstall lands the user
+        // back in their space but with an empty profile, then walks them through
+        // X1–X6 again — and finishing that pushes the blanks over their real bio
+        // and birthday, wiping them from the partner's side too.
+        coupleSpaceService.restoreMyProfile(name: recovered.myName,
+                                            bio: recovered.myBio,
+                                            city: recovered.myCity,
+                                            birthday: recovered.myBirthday)
         wireIdentities()   // the partner may have just come back into existence
         syncNow()          // attach listeners to the space we just re-bound to
     }

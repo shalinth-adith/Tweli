@@ -325,6 +325,24 @@ final class FirebaseService: ObservableObject {
         let isOwner: Bool
         /// The other member's name, if the space already has two people.
         let partnerName: String?
+
+        /// MY OWN profile, read back off the same space document.
+        ///
+        /// Recovery used to restore membership but not identity, which was fine
+        /// until the profile grew fields worth keeping. After a reinstall the
+        /// device has an empty `currentUser` while Firestore still holds the
+        /// real one — so the app walked the user back through X1–X6 with blank
+        /// fields, and finishing that pushed the blanks back up, deleting their
+        /// bio and birthday from the partner's copy too.
+        let myName: String?
+        let myBio: String?
+        let myCity: String?
+        let myBirthday: Date?
+
+        /// Enough of a profile came back that re-asking would be rude.
+        var hasProfile: Bool {
+            !(myName?.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
+        }
     }
 
     /// Finds the caller's space by MEMBERSHIP rather than by cached id.
@@ -362,11 +380,25 @@ final class FirebaseService: ObservableObject {
             setRole(isOwner ? .owner : .participant)
             log("recovered space \(doc.documentID) by membership (owner: \(isOwner))")
 
+            // My own half of the same document. The values are already in this
+            // snapshot, so recovering identity alongside membership costs no
+            // extra read.
+            func mine(_ key: String) -> String? {
+                let map = data[key] as? [String: String] ?? [:]
+                guard let raw = map[uid] else { return nil }
+                let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                return t.isEmpty ? nil : t
+            }
+
             return RecoveredSpace(
                 spaceId: doc.documentID,
                 title: (data["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Our space",
                 isOwner: isOwner,
-                partnerName: partnerUid.flatMap { names[$0] }
+                partnerName: partnerUid.flatMap { names[$0] },
+                myName: names[uid].flatMap { $0.isEmpty ? nil : $0 },
+                myBio: mine("memberBios"),
+                myCity: mine("memberCities"),
+                myBirthday: mine("memberBirthdays").flatMap { Self.birthdayFormatter.date(from: $0) }
             )
         } catch {
             // A failure here must not block sign-in; the user simply lands on
@@ -590,22 +622,35 @@ final class FirebaseService: ObservableObject {
     ///
     /// Empty values are removed rather than written as "", so clearing a bio on
     /// one device actually clears it on the other.
-    func updateMyProfileDetails(bio: String?, city: String?, birthday: Date?) async {
+    /// - Parameter allowClearing: whether an empty value may DELETE the stored
+    ///   one. True when the user deliberately cleared a field; false when the
+    ///   write is incidental (a launch-time push, a partial save), because a
+    ///   device whose local copy is empty is not evidence the user wants the
+    ///   remote copy gone. Without this, one reinstall silently erased a bio and
+    ///   birthday from the partner's side too.
+    func updateMyProfileDetails(bio: String?, city: String?, birthday: Date?,
+                                allowClearing: Bool = false) async {
         guard role != .none, !isDevOrOffline, let spaceId, let uid = currentUid else { return }
 
-        func entry(_ path: String, _ value: String?) -> (FieldPath, Any) {
+        func entry(_ path: String, _ value: String?) -> (FieldPath, Any)? {
             let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (FieldPath([path, uid]),
-                    (trimmed?.isEmpty ?? true) ? FieldValue.delete() : trimmed!)
+            if trimmed?.isEmpty ?? true {
+                guard allowClearing else { return nil }   // leave the stored value alone
+                return (FieldPath([path, uid]), FieldValue.delete())
+            }
+            return (FieldPath([path, uid]), trimmed!)
         }
 
         var payload: [AnyHashable: Any] = ["updatedAt": FieldValue.serverTimestamp()]
         for (path, value) in [entry("memberBios", bio),
                               entry("memberCities", city),
                               entry("memberBirthdays",
-                                    birthday.map { Self.birthdayFormatter.string(from: $0) })] {
+                                    birthday.map { Self.birthdayFormatter.string(from: $0) })]
+            .compactMap({ $0 }) {
             payload[path] = value
         }
+        // Nothing but the timestamp left — don't spend a write on it.
+        guard payload.count > 1 else { return }
 
         do {
             try await db.collection("spaces").document(spaceId).updateData(payload)

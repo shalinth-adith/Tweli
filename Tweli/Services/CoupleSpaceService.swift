@@ -27,10 +27,14 @@ final class CoupleSpaceService: ObservableObject {
     /// `memberNames` / pair-code `createdByName`, so profile-name edits must land
     /// here too — otherwise the partner sees the stale Apple-name fallback ("You").
     private let authNameKey = "tweli.auth.displayName"
-    private let defaults = UserDefaults.standard
+    /// Injectable so tests can run against a scratch domain instead of the real
+    /// one — the same seam ReviewPromptService uses. Defaulted, so the app's
+    /// single call site is unchanged.
+    private let defaults: UserDefaults
 
-    init(cloud: FirebaseService) {
+    init(cloud: FirebaseService, defaults: UserDefaults = .standard) {
         self.cloud = cloud
+        self.defaults = defaults
         self.hasCompletedAboutYou = defaults.bool(forKey: aboutYouKey)
 
         // Real, persisted identity — created once per install, name filled from
@@ -200,6 +204,46 @@ final class CoupleSpaceService: ObservableObject {
         save(space, spaceKey)
         save(partner, partnerKey)
         completeSetup()
+    }
+
+    /// Put MY OWN profile back after a reinstall, from the space document.
+    ///
+    /// Only ever fills gaps — a non-empty local value always wins. The device
+    /// may legitimately be ahead of the server (edited offline, mid-sync), and
+    /// recovery must not roll that back. That is also why this is safe to call
+    /// on every recovery rather than only the first.
+    ///
+    /// Returns true when a name came back, which is the signal that this person
+    /// has been through the profile flow already and should not be asked again.
+    @discardableResult
+    func restoreMyProfile(name: String?, bio: String?, city: String?,
+                          birthday: Date?) -> Bool {
+        let recoveredName = name?.trimmingCharacters(in: .whitespaces)
+
+        if currentUser.displayName.trimmingCharacters(in: .whitespaces).isEmpty,
+           let recoveredName, !recoveredName.isEmpty {
+            currentUser.displayName = recoveredName
+            defaults.set(recoveredName, forKey: authNameKey)
+            // Keep the structured parts coherent, as both editors do.
+            let parts = recoveredName.split(separator: " ", maxSplits: 1).map(String.init)
+            currentUser.firstName = parts.first ?? ""
+            currentUser.lastName = parts.count > 1 ? parts[1] : ""
+        }
+
+        if currentUser.bio?.isEmpty ?? true { currentUser.bio = bio }
+        if currentUser.city?.isEmpty ?? true { currentUser.city = city }
+        if currentUser.birthday == nil { currentUser.birthday = birthday }
+        save(currentUser, userKey)
+
+        let recovered = !(recoveredName?.isEmpty ?? true)
+        if recovered {
+            // They have a profile on the server; re-running X1–X6 would be an
+            // interrogation with the answers already known — and finishing it
+            // with blanks would push those blanks back over the real values.
+            defaults.set(true, forKey: aboutYouKey)
+            hasCompletedAboutYou = true
+        }
+        return recovered
     }
 
     /// Owner side: called once CloudKit reports the invited person has accepted.
