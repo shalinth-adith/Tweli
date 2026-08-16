@@ -17,9 +17,10 @@
 //  grep skips it. Nothing is written to storage or pushed anywhere.
 //
 //  Usage:
-//    SIMCTL_CHILD_TWELI_MOOD_CARD=set     — a fresh mood with a note
-//    SIMCTL_CHILD_TWELI_MOOD_CARD=old     — a mood from yesterday
-//    SIMCTL_CHILD_TWELI_MOOD_CARD=resting — no mood shared yet
+//    SIMCTL_CHILD_TWELI_MOOD_CARD=set          — a fresh mood with a note
+//    SIMCTL_CHILD_TWELI_MOOD_CARD=old          — a mood from yesterday
+//    SIMCTL_CHILD_TWELI_MOOD_CARD=resting      — no mood shared yet
+//    SIMCTL_CHILD_TWELI_MOOD_CARD=interstitial — the 22a/b "new mood" card
 //
 
 #if DEBUG
@@ -38,6 +39,19 @@ struct MoodCardPreviewHarness: View {
         ZStack {
             TweliGradient.sky(scheme).ignoresSafeArea()
 
+            if variant == "interstitial" {
+                MoodInterstitialView(mood: stub(updatedAt: Date().addingTimeInterval(-120)),
+                                     partnerName: "PLACEHOLDER_Partner",
+                                     partnerInitials: "P",
+                                     onSeen: {})
+            } else {
+                homeCards
+            }
+        }
+    }
+
+    private var homeCards: some View {
+        Group {
             VStack(spacing: 12) {
                 // The banner is included because it is the card's neighbour on
                 // Home, and the pair of them is what the timing tag has to read

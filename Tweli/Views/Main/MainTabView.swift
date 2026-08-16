@@ -42,8 +42,7 @@ struct MainTabView: View {
                     mood: mood,
                     partnerName: app.partner?.displayName ?? "Your partner",
                     partnerInitials: app.partner?.initials ?? "?",
-                    onKeep: { app.dismissFreshMood(keep: true) },
-                    onDismiss: { app.dismissFreshMood(keep: false) }
+                    onSeen: { app.dismissFreshMood() }
                 )
                 .transition(.opacity)
                 .zIndex(1)

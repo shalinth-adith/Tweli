@@ -10,12 +10,16 @@
 //  It is SILENT: nothing is sent to the partner, no receipt, no record of which
 //  way you swiped. The scrim fades and Home brightens as you drag.
 //
-//  NOTE — the two directions no longer differ. KEEP used to leave the mood as
-//  the prominent card on Home while DISMISS collapsed it to a one-line strip;
-//  the strip is gone (L3/N3 rest on the full card), so both now mean "seen".
-//  The stamps still read KEEP and DISMISS, which is a promise this screen can
-//  no longer keep — worth resolving, either by simplifying to a neutral
-//  fling-to-close or by giving KEEP something real to do.
+//  The two directions do NOT differ, and the screen no longer pretends they do.
+//  KEEP used to leave the mood as the prominent card on Home while DISMISS
+//  collapsed it to a one-line strip; the strip is gone (L3/N3 rest on the full
+//  card), so there is nothing left for the choice to decide. The stamps went
+//  with it rather than staying on as decoration — a card that offers you two
+//  labelled outcomes and then delivers the same one either way teaches people to
+//  distrust the rest of the app's buttons.
+//
+//  What remains is the part that was always doing the work: a card you fling
+//  away in whichever direction your thumb happens to be going.
 //
 
 import SwiftUI
@@ -25,11 +29,9 @@ struct MoodInterstitialView: View {
     let mood: MoodStatus
     let partnerName: String
     let partnerInitials: String
-    /// Right swipe. Acknowledges the mood — see the note at the top of the file
-    /// for why this is no longer distinguishable from `onDismiss`.
-    var onKeep: () -> Void
-    /// Left swipe / × / scrim tap. Also acknowledges the mood.
-    var onDismiss: () -> Void
+    /// Swiped away, tapped past, or closed — all the same thing: the mood has
+    /// been seen, so the interstitial won't raise again until a newer one lands.
+    var onSeen: () -> Void
 
     @State private var drag: CGSize = .zero
     @State private var appeared = false
@@ -45,7 +47,7 @@ struct MoodInterstitialView: View {
                 .opacity(scrimOpacity)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
-                .onTapGesture { onDismiss() }
+                .onTapGesture { onSeen() }
 
             card
                 .offset(x: drag.width, y: drag.height * 0.12)
@@ -77,8 +79,6 @@ struct MoodInterstitialView: View {
         .frame(maxWidth: 340)
         .background(Color.twElevated)   // white / #1C1C1E
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(alignment: .topLeading) { moodsStamp }
-        .overlay(alignment: .topTrailing) { dismissStamp }
         .overlay(alignment: .topTrailing) { closeButton }
         .shadow(color: .black.opacity(0.4), radius: 40, x: 0, y: 26)
         .padding(.horizontal, 22)
@@ -136,21 +136,25 @@ struct MoodInterstitialView: View {
 
     private var footer: some View {
         VStack(spacing: 10) {
-            // Swipe-direction hints (designs 22a/b) — no action buttons; the card
-            // is driven entirely by the drag.
-            HStack {
-                Label("Swipe left", systemImage: "chevron.left")
-                    .labelStyle(.titleAndIcon)
-                Spacer()
-                Label("Swipe right", systemImage: "chevron.right")
-                    .environment(\.layoutDirection, .rightToLeft)   // icon trails the text
+            // One hint, not two. The comp put "Swipe left" and "Swipe right" at
+            // opposite ends because the two directions used to mean different
+            // things; presenting them as a pair now would imply a choice that
+            // isn't there. The card is still driven entirely by the drag — there
+            // are no action buttons.
+            HStack(spacing: 7) {
+                Image(systemName: "chevron.left").font(.system(size: 11, weight: .black))
+                Text("Swipe either way")
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .black))
             }
             .font(.system(size: 12.5, weight: .bold))
             .foregroundStyle(Color.twInkTertiary)
 
             HStack(spacing: 6) {
                 Image(systemName: "lock.fill").font(.system(size: 10, weight: .semibold))
-                Text("Only you can see how you respond")
+                // Was "how you respond", which described a choice being recorded.
+                // Nothing is recorded and nothing is sent — the honest version of
+                // that reassurance is that they are not told you looked.
+                Text("\(partnerName) isn't told you saw this")
                     .font(.system(size: 11, weight: .semibold))
             }
             .foregroundStyle(Color(UIColor.quaternaryLabel))
@@ -163,44 +167,10 @@ struct MoodInterstitialView: View {
         .padding(.top, 4)
     }
 
-    // MARK: - Drag stamps (appear as you pull)
-
-    private var moodsStamp: some View {
-        stamp(text: "KEEP", color: .twSuccess, rotation: -15, systemImage: "heart.fill")
-            .opacity(stampOpacity(forRightward: true))
-            .padding(.top, 20).padding(.leading, 32)
-    }
-
-    private var dismissStamp: some View {
-        stamp(text: "DISMISS", color: Color(UIColor.systemGray), rotation: 15, systemImage: "xmark")
-            .opacity(stampOpacity(forRightward: false))
-            .padding(.top, 20).padding(.trailing, 32)
-    }
-
-    private func stamp(text: String, color: Color, rotation: Double, systemImage: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: systemImage).font(.system(size: 13, weight: .black))
-            Text(text)
-                .font(.system(size: 17, weight: .black))
-                .kerning(1)
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 12).padding(.vertical, 5)
-        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(color, lineWidth: 3))
-        .rotationEffect(.degrees(rotation))
-        .allowsHitTesting(false)
-    }
-
-    private func stampOpacity(forRightward: Bool) -> Double {
-        let d = drag.width
-        let active = forRightward ? d : -d
-        return Double(min(max(active / threshold, 0), 1))
-    }
-
     // MARK: - Close button
 
     private var closeButton: some View {
-        Button { onDismiss() } label: {
+        Button { onSeen() } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Color.twInkSecondary)
@@ -218,24 +188,22 @@ struct MoodInterstitialView: View {
         DragGesture()
             .onChanged { drag = $0.translation }
             .onEnded { value in
-                if value.translation.width > threshold {
-                    fling(keep: true)
-                } else if value.translation.width < -threshold {
-                    fling(keep: false)
+                // Either direction closes it. Below the threshold it springs
+                // back, which is the only distinction the gesture still makes.
+                if abs(value.translation.width) > threshold {
+                    fling(towards: value.translation.width > 0 ? 1 : -1)
                 } else {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { drag = .zero }
                 }
             }
     }
 
-    private func fling(keep: Bool) {
-        let sign: CGFloat = keep ? 1 : -1
+    /// Continue the card off-screen the way it was already travelling.
+    private func fling(towards sign: CGFloat) {
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         withAnimation(.easeIn(duration: 0.22)) {
             drag = CGSize(width: sign * 700, height: 60)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            if keep { onKeep() } else { onDismiss() }
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onSeen() }
     }
 }

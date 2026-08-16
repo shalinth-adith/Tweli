@@ -133,12 +133,12 @@ final class AppViewModel: ObservableObject {
     /// Resolve the fresh-mood interstitial (designs 22a/b). Always acknowledges the
     /// mood so it won't re-raise. `keep` (right swipe) leaves the prominent mood
     /// card on Home; otherwise (left swipe / × / scrim) it collapses to the strip.
-    func dismissFreshMood(keep: Bool) {
+    func dismissFreshMood() {
         moodService.acknowledgePartnerMood()
-        // `keep` no longer changes anything on Home. It used to decide card vs
-        // one-line strip; the strip is gone and the card always rests in full,
-        // so both directions now mean the same thing — "I've seen it". The
-        // parameter stays because the interstitial still swipes both ways.
+        // Nothing else to decide. This used to take a `keep` flag that chose
+        // between the prominent card and a one-line strip on Home; the strip is
+        // gone and the card always rests in full, so every way out of the
+        // interstitial means exactly one thing — "I've seen it".
         moodService.clearLegacyCollapseState()
         freshMood = nil
     }
