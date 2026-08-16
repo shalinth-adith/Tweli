@@ -22,6 +22,13 @@ import AuthenticationServices
 import UIKit
 
 struct SignInView: View {
+    /// Comp K1 rather than G1: the app was deleted and put back, so the promise
+    /// changes from "we'll start your thread" to "your thread comes back with
+    /// you". Everything else — the Apple button, G3, G4 — is deliberately the
+    /// same code, because a returning user hits exactly the same failures and
+    /// deserves the same diagnostics.
+    var returning = false
+
     @EnvironmentObject private var auth: AuthService
     @Environment(\.colorScheme) private var scheme
     @State private var appear = false
@@ -47,7 +54,7 @@ struct SignInView: View {
             // under the button. Both are moments the user is waiting on, and a
             // footnote is easy to miss while staring at an Apple sheet.
             if auth.isSigningIn || forcedState == "signing" {
-                SigningInState()                                   // G3
+                SigningInState(returning: returning)               // G3
                     .transition(.opacity)
             } else if auth.authError != nil || forcedState == "failed" {
                 SignInFailedState(forced: forcedState == "failed")  // G4
@@ -64,26 +71,103 @@ struct SignInView: View {
         }
     }
 
-    /// G1 — the front door.
+    /// G1 — the front door. K1 when the app has been here before.
     private var entryState: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
-                // Comp G1 stacks a few real-looking reminders behind the copy,
-                // so the promise ("one reminder, both phones") is shown rather
-                // than only claimed.
-                remindersPreview
-                    .padding(.horizontal, 28)
-                    .position(x: geo.size.width / 2, y: geo.size.height * 0.27)
+                // G1 stacks a few illustrative reminders behind the copy so the
+                // promise ("one reminder, both phones") is shown rather than only
+                // claimed. K1 replaces them: a returning user does not need the
+                // pitch, they need to know their thread survived.
+                Group {
+                    if returning { returningHero } else { remindersPreview }
+                }
+                .padding(.horizontal, 28)
+                .position(x: geo.size.width / 2, y: geo.size.height * 0.27)
 
                 VStack(alignment: .leading, spacing: 0) {
                     headline
                     actions.padding(.top, 30)
-                    legal.padding(.top, 14)
+                    if returning { reassurance.padding(.top, 16) }
+                    legal.padding(.top, returning ? 12 : 14)
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 26)
             }
         }
+    }
+
+    // MARK: - K1 · the two ends of a thread that is still there
+
+    /// The comp draws the partner's name on the right ("Anaya — still where you
+    /// left her"). It is not drawn here, and that is deliberate: the only store
+    /// that survives an uninstall is the Keychain, and the marker Tweli keeps
+    /// there is one boolean — no name, no space id, nothing identifying. The
+    /// name comes back with the account a few seconds later, on K2 and K3.
+    private var returningHero: some View {
+        VStack(spacing: 14) {
+            ThreadArc(progress: appear ? 1 : 0)
+                .frame(height: 62)
+                .padding(.horizontal, 6)
+
+            HStack(alignment: .top, spacing: 12) {
+                endpointCard(initial: "Y", name: "You",
+                             detail: "New phone, new install", tint: Color.twAccent)
+                endpointCard(initial: nil, name: "Them",
+                             detail: "Still where you left them", tint: Color.twAccent2)
+            }
+        }
+        .opacity(appear ? 1 : 0)
+        .offset(y: appear ? 0 : -10)
+    }
+
+    private func endpointCard(initial: String?, name: String,
+                              detail: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(initial == nil ? tint.opacity(0.16) : tint.opacity(0.9))
+                    .frame(width: 24, height: 24)
+                    .overlay {
+                        Text(initial ?? "·")
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(initial == nil ? tint : Color.white)
+                    }
+                Text(name)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.twInk)
+            }
+            Text(detail)
+                .font(.system(size: 12))
+                .lineSpacing(2)
+                .foregroundStyle(Color.twInkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 12)
+        .background(Color.twElevated.opacity(0.7),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.twHairline, lineWidth: 1)
+        }
+    }
+
+    /// K1's footnote — the whole reason this screen is calmer than a join flow.
+    private var reassurance: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "clock")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.twAccent2)
+                .padding(.top, 1)
+            Text("Your pair lives on your account, not on this phone. Nothing to re-enter — no code, no new invite.")
+                .font(.system(size: 12.5))
+                .lineSpacing(2.5)
+                .foregroundStyle(Color.twInkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .opacity(appear ? 1 : 0)
     }
 
     // MARK: - Backdrop
@@ -208,14 +292,16 @@ struct SignInView: View {
                 .tracking(6)
                 .foregroundStyle(Color.twInkTertiary)
 
-            Text("Remind us.")
+            Text(returning ? "Welcome back." : "Remind us.")
                 .font(.system(size: 40, weight: .heavy))
                 .tracking(-0.8)
                 .lineSpacing(2)
                 .foregroundStyle(Color.twInk)
                 .padding(.top, 12)
 
-            Text("One reminder, both phones. Sign in and we'll start your thread.")
+            Text(returning
+                 ? "Sign in with the same Apple ID and your thread comes back with you."
+                 : "One reminder, both phones. Sign in and we'll start your thread.")
                 .font(.system(size: 15))
                 .lineSpacing(3)
                 .foregroundStyle(Color.twInkSecondary)
@@ -311,6 +397,10 @@ private struct ThreadArc: View {
 /// looking at Apple's sheet when this begins, and needs to find their place when
 /// they come back.
 private struct SigningInState: View {
+    /// Same screen, one honest change of tense: on a reinstall nothing is being
+    /// set up, it is being found.
+    var returning = false
+
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var draw = false
@@ -333,7 +423,8 @@ private struct SigningInState: View {
                 .foregroundStyle(Color.twInk)
                 .padding(.top, 28)
 
-            Text("Setting up your side of the thread…")
+            Text(returning ? "Looking for your thread…"
+                           : "Setting up your side of the thread…")
                 .font(.system(size: 14.5))
                 .foregroundStyle(Color.twInkSecondary)
                 .padding(.top, 8)

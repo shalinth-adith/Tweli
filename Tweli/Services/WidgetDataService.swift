@@ -59,4 +59,29 @@ final class WidgetDataService: ObservableObject {
         UserDefaults(suiteName: Self.appGroupId)?.removeObject(forKey: Self.snapshotKey)
         WidgetCenter.shared.reloadAllTimelines()
     }
+
+    /// How many Tweli widgets the user currently has placed.
+    ///
+    /// Comp K4 tells a returning user their widget is gone. That is true after
+    /// almost every reinstall — but not after one where they re-added it before
+    /// opening the app, and a screen that insists otherwise is describing a
+    /// state that does not exist.
+    ///
+    /// Returns nil when WidgetKit could not answer (no App Group, an extension
+    /// that failed to load, the simulator). Nil means UNKNOWN, and the caller
+    /// must treat it as "don't claim anything" — reporting it as zero would
+    /// turn a missing answer into a false one.
+    func installedWidgetCount() async -> Int? {
+        await withCheckedContinuation { continuation in
+            WidgetCenter.shared.getCurrentConfigurations { result in
+                switch result {
+                case .success(let widgets):
+                    continuation.resume(returning: widgets.count)
+                case .failure(let error):
+                    print("[WidgetDataService] getCurrentConfigurations failed: \(error.localizedDescription)")
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+    }
 }

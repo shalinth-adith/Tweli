@@ -348,10 +348,53 @@ final class FirebaseService: ObservableObject {
         let myCity: String?
         let myBirthday: Date?
 
+        /// When the space was created, so comp K3 can say "Paired 214 days"
+        /// from the record rather than from a guess. Nil on spaces created
+        /// before `createdAt` was written, and the line is simply omitted then.
+        var createdAt: Date?
+
+        /// The partner walked out while the app was off this phone (comp K5).
+        /// Both come off the space document the leave writes — `leftByName` is
+        /// set by the `leaveSpace` function precisely because `memberNames` is
+        /// cleared at the same moment.
+        var leftByName: String?
+        var leftAt: Date?
+
         /// Enough of a profile came back that re-asking would be rude.
         var hasProfile: Bool {
             !(myName?.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
         }
+
+        /// Days since pairing, for K3's subtitle. Nil rather than 0 when the
+        /// space predates `createdAt`: "Paired 0 days" would be a lie, and an
+        /// absent line is not.
+        var pairedDays: Int? {
+            guard let createdAt else { return nil }
+            let days = Calendar.current.dateComponents([.day], from: createdAt, to: Date()).day
+            guard let days, days >= 0 else { return nil }
+            return days
+        }
+    }
+
+    /// The four things a recovery attempt can honestly conclude.
+    ///
+    /// `restoreSpaceMembership()` collapsed all of these into `RecoveredSpace?`,
+    /// which was enough while the only consumer was "rebind silently or don't".
+    /// Comps K3/K5 need more: telling somebody their partner left is only
+    /// defensible when the server actually said so, and a dropped connection
+    /// must never be reported as a departure.
+    enum RestoreOutcome {
+        /// A live two-person space. Comp K3.
+        case restored(RecoveredSpace)
+        /// The space is still there and we are still in it, but the other member
+        /// removed themselves. Comp K5, with a name and a date.
+        case partnerLeft(RecoveredSpace)
+        /// The query succeeded and there is genuinely nothing to recover — never
+        /// paired, or the space was swept after both sides went quiet.
+        case nothingToRestore
+        /// The lookup failed. Says nothing about whether a space exists, so the
+        /// caller must not draw K5 from it.
+        case unreachable
     }
 
     /// Finds the caller's space by MEMBERSHIP rather than by cached id.
@@ -406,8 +449,18 @@ final class FirebaseService: ObservableObject {
         }
     }
 
+    /// Back-compat shape for callers that only care whether a space came back.
     func restoreSpaceMembership() async -> RecoveredSpace? {
-        guard !isDevOrOffline, let uid = currentUid, spaceId == nil else { return nil }
+        switch await restoreSpace() {
+        case .restored(let space): return space
+        case .partnerLeft, .nothingToRestore, .unreachable: return nil
+        }
+    }
+
+    func restoreSpace() async -> RestoreOutcome {
+        guard !isDevOrOffline, let uid = currentUid, spaceId == nil else {
+            return .nothingToRestore
+        }
         do {
             // NO `.limit(to: 1)`. That assumed one membership per person, which
             // the two-person cap makes *feel* true — but the cap is per space,
@@ -422,7 +475,7 @@ final class FirebaseService: ObservableObject {
 
             guard let doc = Self.bestSpace(from: snap.documents, uid: uid) else {
                 log("no existing space to recover for uid=\(uid)")
-                return nil
+                return .nothingToRestore
             }
             if snap.documents.count > 1 {
                 log("recovery: \(snap.documents.count) memberships, chose \(doc.documentID)")
@@ -447,7 +500,17 @@ final class FirebaseService: ObservableObject {
                 return t.isEmpty ? nil : t
             }
 
-            return RecoveredSpace(
+            // Who walked out, if anyone. `leaveSpace` (functions/index.js) moves
+            // the departing member's name to `leftByName` and deletes their
+            // `memberNames` entry in the same write, so the name has to be read
+            // from there — `names[leftBy]` is nil by design on that path.
+            let leftBy = data["leftBy"] as? String
+            let partnerLeft = leftBy != nil && leftBy != uid && partnerUid == nil
+            let leftByName = (data["leftByName"] as? String)
+                .flatMap { $0.isEmpty ? nil : $0 }
+                ?? leftBy.flatMap { names[$0] }
+
+            let space = RecoveredSpace(
                 spaceId: doc.documentID,
                 title: (data["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Our space",
                 isOwner: isOwner,
@@ -455,13 +518,19 @@ final class FirebaseService: ObservableObject {
                 myName: names[uid].flatMap { $0.isEmpty ? nil : $0 },
                 myBio: mine("memberBios"),
                 myCity: mine("memberCities"),
-                myBirthday: mine("memberBirthdays").flatMap { Self.birthdayFormatter.date(from: $0) }
+                myBirthday: mine("memberBirthdays").flatMap { Self.birthdayFormatter.date(from: $0) },
+                createdAt: (data["createdAt"] as? Timestamp)?.dateValue(),
+                leftByName: partnerLeft ? leftByName : nil,
+                leftAt: partnerLeft ? (data["leftAt"] as? Timestamp)?.dateValue() : nil
             )
+            return partnerLeft ? .partnerLeft(space) : .restored(space)
         } catch {
             // A failure here must not block sign-in; the user simply lands on
             // Start-or-join as they did before, and the next launch retries.
+            // Reported as `.unreachable`, never as "nothing to restore" — the
+            // difference is whether comp K5 is allowed to claim a partner left.
             log("restoreSpaceMembership failed: \(error.localizedDescription)")
-            return nil
+            return .unreachable
         }
     }
 
@@ -883,7 +952,16 @@ final class FirebaseService: ObservableObject {
             if let leftBy = data["leftBy"] as? String,
                leftBy != self.currentUid,
                members.count == 1, members.first == self.currentUid {
-                changes.partnerLeftName = names[leftBy] ?? "Your partner"
+                // `leftByName` first. The server-side leave deletes the leaver's
+                // `memberNames` entry in the same write that stamps `leftBy`, so
+                // reading only `names[leftBy]` made comp E6 say "Your partner
+                // left the space" whenever the function path succeeded — i.e.
+                // almost always. The map lookup stays as the fallback for the
+                // offline client-side path, which still leaves the name behind.
+                changes.partnerLeftName = (data["leftByName"] as? String)
+                    .flatMap { $0.isEmpty ? nil : $0 }
+                    ?? names[leftBy]
+                    ?? "Your partner"
                 onChange(changes)
                 return
             }

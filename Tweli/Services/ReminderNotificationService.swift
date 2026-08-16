@@ -36,6 +36,20 @@ final class ReminderNotificationService: NSObject, ObservableObject, UNUserNotif
         }
     }
 
+    /// Awaitable variant, for callers that decide something on the answer.
+    ///
+    /// `refreshAuthorizationStatus()` returns before its callback lands, so
+    /// reading `authorizationStatus` on the next line sees the value from
+    /// BEFORE the refresh. Comp K4 decides whether to tell the user their
+    /// notifications are off, and deciding that from a stale read is how a
+    /// screen ends up describing a state that isn't real.
+    @discardableResult
+    func currentAuthorizationStatus() async -> UNAuthorizationStatus {
+        let status = await center.notificationSettings().authorizationStatus
+        authorizationStatus = status
+        return status
+    }
+
     @discardableResult
     func requestAuthorization() async -> Bool {
         do {

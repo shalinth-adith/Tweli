@@ -30,6 +30,27 @@ struct RootView: View {
                 // offline shows the E1 banner on Home instead.
                 SomethingSnappedView(detail: failure) { app.retryAfterFatalError() }
                     .transition(.opacity)
+            } else if app.restorePhase == .restoring {
+                // Comps K2 / KL2. Ahead of the ordinary routing on purpose:
+                // while the space is being re-bound the app is briefly in a
+                // state that LOOKS like "signed in, no space", and the branches
+                // below would flash Start-or-join over a thread that is on its
+                // way back.
+                RestoringView()
+                    .transition(.opacity)
+            } else if app.restorePhase == .rejoined, let summary = app.restoreSummary {
+                WelcomeBackView(summary: summary)                          // K3
+                    .transition(.opacity)
+            } else if app.restorePhase == .pairGone, let gone = app.pairGone {
+                // K5 / KL5, and it must outrank E6 below. Both describe the same
+                // departure; the difference is that E6 speaks in the present
+                // tense ("… left the space") because the user was watching, and
+                // this one has to say WHEN, because they weren't.
+                PairGoneView(detail: gone)                                 // K5
+                    .transition(.opacity)
+            } else if app.restorePhase == .cleanup {
+                ReinstallCleanupView()                                     // K4
+                    .transition(.opacity)
             } else if let goneName = app.partnerLeftName {
                 // Comp E6. Sits above the tab bar rather than inside it: the
                 // space is half a thread now, and the tabs would be lying.
@@ -43,7 +64,8 @@ struct RootView: View {
                 TutorialView { app.finishTutorial() }
                     .transition(.opacity)
             } else if !auth.isSignedIn {
-                SignInView()
+                // K1 / KL1 when this device has run Tweli before, G1 otherwise.
+                SignInView(returning: app.isReinstall)
                     .transition(.opacity)
             } else if !couple.hasCompletedAboutYou {
                 // Comps X1–X6. One question per screen on first run; AboutYouView
@@ -68,6 +90,7 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.35), value: couple.isConnected)
         .animation(.easeInOut(duration: 0.35), value: app.partnerLeftName)
         .animation(.easeInOut(duration: 0.35), value: app.fatalSyncError)
+        .animation(.easeInOut(duration: 0.35), value: app.restorePhase)
 
         .sheet(item: $app.pendingInvite) { invite in
             JoinConfirmView(invite: invite)
@@ -82,6 +105,15 @@ struct RootView: View {
             // Recover a space this device has no local record of BEFORE the
             // splash hands over, so a returning user never sees Start-or-join
             // flash up over a space they are still a member of.
+            //
+            // Skipped on a reinstall: there the recovery is not a silent repair
+            // but the screen itself (K2), and doing it here first would leave
+            // that screen with nothing left to find — including the `createdAt`
+            // K3 needs for "Paired 214 days".
+#if DEBUG
+            RestoreCapture.applyIfNeeded(to: app)
+#endif
+            guard !app.isReinstall else { return }
             await app.recoverSpaceIfNeeded()
         }
         .task {

@@ -51,6 +51,26 @@ enum AppEnvironment {
             return
         }
 
+        // TWELI_REINSTALL=1 stages a reinstall for comps K1 / KL1. The real
+        // signal is a Keychain record with NO matching UserDefaults key, so both
+        // halves have to be arranged — a fresh simulator has neither, which is
+        // why simply deleting the defaults key leaves the app on G1.
+        //
+        // `markPaired()` writes the genuine record through the genuine gate; the
+        // only thing faked is the uninstall itself.
+        //
+        // K1 additionally needs no session, since it IS the signed-out screen.
+        if env["TWELI_REINSTALL"] == "1" {
+            ReinstallGate().markPaired()
+            d.removeObject(forKey: ReinstallGate.defaultsKey)
+            d.set(true, forKey: TutorialGate.key)
+            d.removeObject(forKey: "tweli.auth.appleUserId")
+            d.set(false, forKey: "tweli.aboutYouDone")
+            d.set(false, forKey: "tweli.roomSetupComplete")
+            d.removeObject(forKey: "tweli.coupleSpace")
+            return
+        }
+
         guard env["TWELI_SKIP_ONBOARDING"] == "1" else { return }
 
         // TWELI_STAGE=profile|room|tabs. Absent means `tabs`, which is what

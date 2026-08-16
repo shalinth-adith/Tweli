@@ -37,6 +37,41 @@ final class AppViewModel: ObservableObject {
         withAnimation(.easeInOut(duration: 0.35)) { showTutorial = false }
     }
 
+    // MARK: - Reinstall (comps K1–K5)
+
+    private let reinstallGate = ReinstallGate()
+
+    /// What kind of launch this is, read ONCE for the same reason `showTutorial`
+    /// is: `markInstalled()` below immediately makes the answer `.sameInstall`,
+    /// so anything that re-read it would lose the whole flow mid-session.
+    let launch: ReinstallGate.Launch
+
+    /// True for the entire session when the app was deleted and put back. Drives
+    /// K1's copy, suppresses the 0Z tutorial (a returning user does not need to
+    /// be told what Tweli is), and arms the K2 → K3/K5 sequence after sign-in.
+    var isReinstall: Bool {
+        if case .reinstall = launch { return true }
+        return false
+    }
+
+    /// Whether this device was ever actually in a pair. Without it, "signed in,
+    /// no space" is ambiguous between a returning partner whose space is gone
+    /// (K5) and somebody who reinstalled before ever pairing (Start-or-join).
+    var hadPairBefore: Bool {
+        if case .reinstall(let hadPair) = launch { return hadPair }
+        return false
+    }
+
+    @Published private(set) var restorePhase: RestorePhase = .none
+    /// K2's checklist, rebuilt as each stage resolves.
+    @Published private(set) var restoreSteps: [RestoreStep] = []
+    /// K3's figures. Nil until the restore has actually counted them.
+    @Published private(set) var restoreSummary: RestoreSummary?
+    /// K5's facts.
+    @Published private(set) var pairGone: PairGoneDetail?
+    /// K4's two rows, filtered to whatever is genuinely undone.
+    @Published private(set) var cleanup = ReinstallCleanup()
+
     /// Set when the partner opens an invite link — drives the "confirm join" sheet.
     /// The share is only accepted once the user taps Join (see `confirmPendingJoin`).
     @Published var pendingInvite: PendingInvite?
@@ -191,6 +226,17 @@ final class AppViewModel: ObservableObject {
     let locationService: LocationService
 
     init() {
+        // A local gate, not `self.reinstallGate`: `launch` is a `let` with no
+        // default, so nothing on `self` may be read until it is assigned. The
+        // type is stateless, so a second instance is free.
+        //
+        // Read before writing. `markInstalled()` is what makes the FOLLOWING
+        // launch ordinary, so the classification has to be taken first and then
+        // held for the whole session.
+        let gate = ReinstallGate()
+        launch = gate.launch
+        gate.markInstalled()
+
         coupleSpaceService = CoupleSpaceService(cloud: cloud)
         reminderService = ReminderService(notifications: notifications, cloud: cloud)
         countdownService = CountdownService(cloud: cloud, notifications: notifications)
@@ -229,7 +275,15 @@ final class AppViewModel: ObservableObject {
                 self.wireIdentities()
                 // A returning user may still be a member of a space this device
                 // knows nothing about (reinstall, new phone, or sign-out).
-                Task { await self.recoverSpaceIfNeeded() }
+                //
+                // On a reinstall this is not a background repair — it is the
+                // screen. K2 shows the same work happening, so the sequence is
+                // handed to `runRestore()` and the silent path is skipped.
+                if self.isReinstall {
+                    self.beginRestore()
+                } else {
+                    Task { await self.recoverSpaceIfNeeded() }
+                }
             }
             .store(in: &cancellables)
 
@@ -238,6 +292,16 @@ final class AppViewModel: ObservableObject {
         cloud.$fatalSyncError
             .receive(on: DispatchQueue.main)
             .assign(to: &$fatalSyncError)
+
+        if isReinstall {
+            // The 0Z tutorial lives in UserDefaults, which the delete wiped — so
+            // without this a returning user is taught what Tweli is on their way
+            // back into a thread they have been keeping for months.
+            showTutorial = false
+            // K1 rather than G1, until they sign in. The Apple sheet and both
+            // failure states (G3/G4) are unchanged; only the promise differs.
+            if !auth.isSignedIn { restorePhase = .signIn }
+        }
     }
 
     // MARK: - Convenience
@@ -260,6 +324,10 @@ final class AppViewModel: ObservableObject {
 
     private func wireIdentities() {
         if auth.isSignedIn { coupleSpaceService.seedDisplayName(auth.displayName) }
+        // The moment there are genuinely two people, record it where a delete
+        // can't reach. Idempotent, and this runs on every identity change, so
+        // there is no single "you are now paired" event to miss.
+        if coupleSpaceService.partner != nil { reinstallGate.markPaired() }
         let meId = coupleSpaceService.currentUser.id
         // No partner yet → a sentinel id that matches no real record (empty data).
         let partnerId = coupleSpaceService.partner?.id ?? Self.noPartnerId
@@ -490,7 +558,253 @@ final class AppViewModel: ObservableObject {
                                             birthday: recovered.myBirthday)
         wireIdentities()   // the partner may have just come back into existence
         syncNow()          // attach listeners to the space we just re-bound to
+        reinstallGate.markPaired()
     }
+
+    // MARK: - Reinstall restore (comps K2 → K3 / K5 → K4)
+
+    private var restoreTask: Task<Void, Never>?
+
+    /// Raise K2 and start the work it is describing. Idempotent: a second
+    /// sign-in event (Combine replays the current value to a new subscriber)
+    /// must not restart a restore that is already running or finished.
+    func beginRestore() {
+        guard restorePhase == .none || restorePhase == .signIn else { return }
+        guard restoreTask == nil else { return }
+        restorePhase = .restoring
+        restoreSteps = Self.initialRestoreSteps
+        restoreTask = Task { await runRestore() }
+    }
+
+    /// K2's four rows, in the order the comp lists them. Held as a template so
+    /// the checklist has its full shape from the first frame — rows appearing
+    /// one at a time would make the screen jump as each resolves.
+    private static var initialRestoreSteps: [RestoreStep] {
+        [
+            RestoreStep(id: "account", title: "Account verified", state: .running),
+            RestoreStep(id: "pair", title: "Finding your pair"),
+            RestoreStep(id: "items", title: "Reminders & letters"),
+            RestoreStep(id: "mood", title: "Her mood & planned dates"),
+        ]
+    }
+
+    private func setStep(_ id: String, _ state: RestoreStep.State, detail: String? = nil) {
+        guard let i = restoreSteps.firstIndex(where: { $0.id == id }) else { return }
+        restoreSteps[i].state = state
+        if let detail { restoreSteps[i].detail = detail }
+    }
+
+    private func setStepTitle(_ id: String, _ title: String) {
+        guard let i = restoreSteps.firstIndex(where: { $0.id == id }) else { return }
+        restoreSteps[i].title = title
+    }
+
+    /// The whole of K2, and the decision about which screen follows it.
+    ///
+    /// Paced, not padded: each stage waits on real work and then holds briefly
+    /// so the row it just ticked is legible. A restore that genuinely takes four
+    /// seconds shows four seconds of progress; one that takes 300ms still reads
+    /// as a sequence rather than a flash.
+    private func runRestore() async {
+        await cloud.refreshAccountStatus()
+        setStep("account", .done)
+        await pause(0.45)
+
+        setStep("pair", .running)
+        let outcome = await cloud.restoreSpace()
+
+        switch outcome {
+        case .partnerLeft(let space):
+            await finishAsPairGone(name: space.leftByName, leftAt: space.leftAt)
+
+        case .nothingToRestore, .unreachable:
+            // Already connected locally (a re-sign-in on a device that never
+            // lost its space) is the ordinary case and is not a failure.
+            if coupleSpaceService.isConnected {
+                await finishAsRejoined(space: nil)
+            } else if hadPairBefore, case .nothingToRestore = outcome {
+                // The account is fine and the server answered — there is simply
+                // no space left. Only `.nothingToRestore` may conclude this;
+                // `.unreachable` says nothing about whether a pair exists.
+                await finishAsPairGone(name: nil, leftAt: nil)
+            } else {
+                // Never paired, or we could not reach the server. Fall through
+                // to the ordinary routing (Start-or-join), which retries on the
+                // next launch.
+                endRestore()
+            }
+
+        case .restored(let space):
+            coupleSpaceService.restoreFromRecoveredSpace(title: space.title,
+                                                         isOwner: space.isOwner,
+                                                         partnerName: space.partnerName)
+            coupleSpaceService.restoreMyProfile(name: space.myName,
+                                                bio: space.myBio,
+                                                city: space.myCity,
+                                                birthday: space.myBirthday)
+            wireIdentities()
+            reinstallGate.markPaired()
+
+            let days = space.pairedDays
+            setStep("pair", .done,
+                    detail: days.map { "\($0) \($0 == 1 ? "day" : "days")" })
+            setStepTitle("pair", space.partnerName.map { "Pair found — \($0)" }
+                                 ?? "Pair found")
+            await pause(0.5)
+
+            // Attach the listeners and let them deliver. Everything K3 counts is
+            // read back out of the local services afterwards, so the figures it
+            // prints are the same records the next screen shows.
+            setStep("items", .running)
+            syncNow()
+            await waitForSyncToSettle()
+
+            let letters = letterService.letters.count
+            let reminders = reminderService.reminders.count
+            setStep("items", reminders + letters > 0 ? .done : .skipped,
+                    detail: reminders + letters > 0 ? "\(reminders + letters) items" : nil)
+            await pause(0.35)
+
+            setStep("mood", moodService.partnerMood != nil || !virtualDateService.dates.isEmpty
+                            ? .done : .skipped)
+            await pause(0.4)
+
+            await finishAsRejoined(space: space)
+        }
+    }
+
+    /// Give the listeners a chance to deliver, then stop as soon as the local
+    /// store stops growing.
+    ///
+    /// There is no "first snapshot" callback to await: `startListening` only
+    /// invokes its handler when a batch is non-empty, so an empty space would
+    /// never call back and a plain await would hang for the full timeout. Settle
+    /// detection handles both — a space with data finishes shortly after the
+    /// last batch lands, an empty one finishes at the floor.
+    private func waitForSyncToSettle(floor: Double = 1.2,
+                                     ceiling: Double = 6.0) async {
+        let start = Date()
+        var lastCount = -1
+        var stableTicks = 0
+
+        while Date().timeIntervalSince(start) < ceiling {
+            await pause(0.25)
+            let count = reminderService.reminders.count
+                + letterService.letters.count
+                + virtualDateService.dates.count
+                + moodService.moods.count
+            stableTicks = (count == lastCount) ? stableTicks + 1 : 0
+            lastCount = count
+            // Two quiet ticks AND past the floor. The floor is not decoration:
+            // Firestore's cache answers a warm query in milliseconds, and a
+            // checklist that ticks four rows in one frame reads as a glitch.
+            if stableTicks >= 2, Date().timeIntervalSince(start) >= floor { return }
+        }
+    }
+
+    private func finishAsRejoined(space: FirebaseService.RecoveredSpace?) async {
+        restoreSummary = RestoreCounting.summary(
+            partnerName: coupleSpaceService.partner?.displayName ?? "your partner",
+            pairedDays: space?.pairedDays,
+            reminders: reminderService.reminders,
+            letters: letterService.letters,
+            partnerMood: moodService.partnerMood,
+            dates: virtualDateService.dates)
+        await refreshCleanupState()
+        restorePhase = .rejoined
+        restoreTask = nil
+    }
+
+    private func finishAsPairGone(name: String?, leftAt: Date?) async {
+        // The listeners still need to run: K5's "kept for you" counts real
+        // letters and finished reminders, and they only exist locally once the
+        // space we are still a member of has synced.
+        syncNow()
+        await waitForSyncToSettle(floor: 0.8, ceiling: 4.0)
+        pairGone = RestoreCounting.keepsakes(partnerName: name,
+                                             leftAt: leftAt,
+                                             reminders: reminderService.reminders,
+                                             letters: letterService.letters)
+        restorePhase = .pairGone
+        restoreTask = nil
+    }
+
+    /// K3's "Open Tweli" — go to K4 if anything is genuinely undone, otherwise
+    /// straight into the app.
+    func finishRejoined() {
+        Task {
+            await refreshCleanupState()
+            withAnimation(.easeInOut(duration: 0.35)) {
+                restorePhase = cleanup.isEmpty ? .none : .cleanup
+            }
+        }
+    }
+
+    /// K4's "Later", and the exit from every other K screen.
+    func endRestore() {
+        withAnimation(.easeInOut(duration: 0.35)) { restorePhase = .none }
+        restoreTask = nil
+    }
+
+    /// K5 → "Start a new thread": drop the dead space and land on Start-or-join.
+    func startFreshAfterPairGone() {
+        coupleSpaceService.disconnect()
+        cloud.reset()
+        listeningSpaceId = nil
+        pairGone = nil
+        endRestore()
+    }
+
+    /// Ask the system what is actually missing. Both answers come from iOS, not
+    /// from an assumption about what a reinstall usually wipes — telling someone
+    /// their widget is gone when it is sitting on their Home Screen is the same
+    /// class of untruth as inventing a count.
+    func refreshCleanupState() async {
+        let widgets = await widget.installedWidgetCount()
+        let status = await notifications.currentAuthorizationStatus()
+        cleanup = ReinstallCleanup(
+            // `nil` is "WidgetKit didn't answer", which is not the same as
+            // "there are none" — so it claims nothing.
+            widgetMissing: widgets == 0,
+            notificationsOff: status != .authorized)
+    }
+
+    /// K4's "Turn on notifications". Re-checks afterwards so the row disappears
+    /// on success and stays put (pointing at Settings) on a denial.
+    func requestNotificationsFromCleanup() async {
+        _ = await notifications.requestAuthorization()
+        await refreshCleanupState()
+        if cleanup.isEmpty { endRestore() }
+    }
+
+    private func pause(_ seconds: Double) async {
+        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+
+#if DEBUG
+    /// Verification hook (DEBUG only, compiled out of every distribution build).
+    ///
+    /// Reaching K2–K5 for real needs a signed-in Apple account, a live space and
+    /// an actual uninstall — none of which a headless simulator can do, and it
+    /// cannot inject the taps to walk there either. This is the only door into
+    /// those states for a screenshot.
+    ///
+    /// It takes prepared values rather than inventing any: the stand-in figures
+    /// live in `RestoreCapturePreviews.swift`, which is where a reader looks for
+    /// fake data and where the pre-ship grep expects to find it. Nothing here is
+    /// written to storage or pushed anywhere.
+    func applyRestoreCaptureState(phase: RestorePhase,
+                                  steps: [RestoreStep] = [],
+                                  summary: RestoreSummary? = nil,
+                                  gone: PairGoneDetail? = nil,
+                                  pendingCleanup: ReinstallCleanup = ReinstallCleanup()) {
+        restoreSteps = steps
+        restoreSummary = summary
+        pairGone = gone
+        cleanup = pendingCleanup
+        restorePhase = phase
+    }
+#endif
 
     /// Sign out WITHOUT leaving the shared space.
     ///
@@ -543,6 +857,13 @@ final class AppViewModel: ObservableObject {
         freshMood = nil
         pendingInvite = nil
         pendingJoinCode = nil
+        restorePhase = .none
+        restoreSummary = nil
+        pairGone = nil
+        // The Keychain marker describes an account that no longer exists.
+        // Leaving it would greet the next install with "welcome back" — and,
+        // worse, `hadPair` would send a genuinely new user to comp K5.
+        reinstallGate.forget()
 
         let defaults = UserDefaults.standard
         for key in [
