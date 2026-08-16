@@ -30,6 +30,29 @@ enum RestoreCapture {
     /// Applies the state named by `TWELI_RESTORE`, or does nothing.
     @MainActor
     static func applyIfNeeded(to app: AppViewModel) {
+        // TWELI_AUTO_SIGNIN=<seconds> drives the LIVE sequence rather than
+        // painting a frozen frame: paired with TWELI_REINSTALL=1 it walks
+        // K1 → K2 → the outcome screen exactly as a real sign-in would. It is
+        // the only way to check the state machine actually REACHES K2 on a
+        // simulator, which cannot inject the tap on the Apple button.
+        //
+        // The delay matters. Signing in at t=0 fires while the splash is still
+        // up, which is not what a real user does — they see the splash, then
+        // K1, then tap. A delay past the splash reproduces the real ordering,
+        // and it is how the "restore runs invisibly behind the splash" bug was
+        // found in the first place.
+        if let raw = ProcessInfo.processInfo.environment["TWELI_AUTO_SIGNIN"],
+           !app.auth.isSignedIn {
+            let delay = Double(raw) ?? 0
+            Task { @MainActor in
+                if delay > 0 {
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+                guard !app.auth.isSignedIn else { return }
+                app.auth.devSignIn()
+            }
+        }
+
         guard let key = ProcessInfo.processInfo.environment["TWELI_RESTORE"] else { return }
         switch key {
         case "k2": app.applyRestoreCaptureState(phase: .restoring, steps: steps)

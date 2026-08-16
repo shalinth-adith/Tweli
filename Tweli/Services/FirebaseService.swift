@@ -158,7 +158,19 @@ final class FirebaseService: ObservableObject {
 
     // MARK: - Auth (Sign in with Apple → Firebase Auth)
 
-    struct FirebaseUser { let uid: String; let displayName: String }
+    struct FirebaseUser {
+        let uid: String
+        let displayName: String
+        /// True only when Firebase created the account during THIS sign-in.
+        ///
+        /// This is the difference between "welcome" and "welcome back", and it
+        /// is the only reliable way to tell them apart on a device that has just
+        /// been wiped. The Keychain marker answers the same question, but only
+        /// for devices that ran a build which had already written one — anyone
+        /// upgrading from an older build, or restoring onto a new phone, has no
+        /// marker and would otherwise be treated as brand new.
+        let isNewAccount: Bool
+    }
 
     /// Exchange a verified Apple credential for a Firebase session (nonce flow).
     /// Called by AuthService from the SignInWithAppleButton completion. Returns the
@@ -181,8 +193,13 @@ final class FirebaseService: ObservableObject {
         }
         if name.isEmpty { name = defaults.string(forKey: authNameKey) ?? "" }
         if name.isEmpty { name = "You" }
-        log("signed in uid=\(uid)")
-        return FirebaseUser(uid: uid, displayName: name)
+        // Absent metadata is treated as "not new". Guessing wrong in that
+        // direction costs a returning user nothing worse than a restore screen
+        // that finds their space; guessing the other way would drop them on
+        // Start-or-join with a live space sitting in Firestore.
+        let isNew = result.additionalUserInfo?.isNewUser ?? false
+        log("signed in uid=\(uid) newAccount=\(isNew)")
+        return FirebaseUser(uid: uid, displayName: name, isNewAccount: isNew)
     }
 
     /// Firebase Auth sign-out; clears role + spaceId. No-op (beyond local clear) in

@@ -258,7 +258,7 @@ final class AppViewModel: ObservableObject {
         // and sign-out, without AuthService importing Firebase.
         auth.exchangeCredential = { [cloud] idToken, rawNonce, fullName in
             let user = try await cloud.signInWithApple(idToken: idToken, rawNonce: rawNonce, fullName: fullName)
-            return (user.uid, user.displayName)
+            return (user.uid, user.displayName, user.isNewAccount)
         }
         auth.onSignOut = { [cloud] in try? cloud.signOut() }
         auth.revokeAppleToken = { [cloud] code in
@@ -280,10 +280,10 @@ final class AppViewModel: ObservableObject {
                 // A returning user may still be a member of a space this device
                 // knows nothing about (reinstall, new phone, or sign-out).
                 //
-                // On a reinstall this is not a background repair — it is the
-                // screen. K2 shows the same work happening, so the sequence is
-                // handed to `runRestore()` and the silent path is skipped.
-                if self.isReinstall {
+                // When there is a thread to go and find, that is not a silent
+                // background repair — it is comp K2, and the user should watch
+                // it happen. Otherwise fall back to the quiet path.
+                if self.shouldShowRestore {
                     self.beginRestore()
                 } else {
                     Task { await self.recoverSpaceIfNeeded() }
@@ -569,6 +569,32 @@ final class AppViewModel: ObservableObject {
 
     private var restoreTask: Task<Void, Never>?
 
+    /// Whether this sign-in should show comp K2 rather than repair silently.
+    ///
+    /// K2 was originally gated on the Keychain marker alone, which made it
+    /// almost unreachable in practice: the marker is only written by builds that
+    /// have this feature, so the FIRST install of such a build lays it down and
+    /// only a LATER delete-and-reinstall can read it back. Anyone upgrading from
+    /// an older build, restoring onto a new phone, or simply signing out and
+    /// back in got the silent path and never saw the screen.
+    ///
+    /// The honest condition is not "was this a reinstall" but "is there a thread
+    /// to go and find":
+    ///
+    ///   1. This device has no space locally — nothing to restore otherwise, and
+    ///      showing progress over an already-loaded space is theatre.
+    ///   2. Either our marker says reinstall, OR Firebase says the account
+    ///      already existed. The second covers every device the marker cannot.
+    ///
+    /// A genuinely new account fails (2) and takes the silent path, so nobody is
+    /// ever told we are finding a thread they have never had. `nil` (a restored
+    /// session rather than a fresh sign-in) also fails it, deliberately: that is
+    /// the ordinary launch, and it is handled by `recoverSpaceIfNeeded()`.
+    private var shouldShowRestore: Bool {
+        guard !coupleSpaceService.isConnected else { return false }
+        return isReinstall || auth.signedInToExistingAccount == true
+    }
+
     /// Raise K2 and start the work it is describing. Idempotent: a second
     /// sign-in event (Combine replays the current value to a new subscriber)
     /// must not restart a restore that is already running or finished.
@@ -577,7 +603,53 @@ final class AppViewModel: ObservableObject {
         guard restoreTask == nil else { return }
         restorePhase = .restoring
         restoreSteps = Self.initialRestoreSteps
-        restoreTask = Task { await runRestore() }
+        restoreTask = Task {
+            // The splash outranks every routing branch, so a restore that
+            // starts while it is up runs to completion behind it and the user
+            // lands on the OUTCOME screen having never seen K2. Observed
+            // exactly that: splash → "There's no pair to return to", with the
+            // whole restore invisible in between.
+            await waitForSplashToLift()
+            // Start the clock only once the screen is actually visible —
+            // otherwise the floor below is spent behind the splash and buys
+            // nothing.
+            restoreStartedAt = Date()
+            await runRestore()
+        }
+    }
+
+    private var restoreStartedAt: Date?
+
+    /// Hold until the splash has handed over, so K2 opens on a visible screen.
+    ///
+    /// Polled rather than observed: `showSplash` is plain `@Published` state
+    /// that SplashView flips from its own animation callback, and a one-shot
+    /// await would need a subscription torn down on every exit path. The ceiling
+    /// matches the root's own splash safety net — if the splash somehow never
+    /// lifts, the restore must not be stranded behind it either.
+    private func waitForSplashToLift(ceiling: Double = 9.0) async {
+        let start = Date()
+        while showSplash, Date().timeIntervalSince(start) < ceiling {
+            await pause(0.1)
+        }
+    }
+
+    /// The shortest time K2 may stay on screen, in seconds.
+    ///
+    /// Not padding. Several outcomes resolve almost instantly — a warm Firestore
+    /// cache, a query that finds nothing, an account that turns out to be
+    /// already connected — and a screen that appears and vanishes inside half a
+    /// second reads as a glitch, not as progress. It is also the one screen that
+    /// tells a returning user their thread survived; flashing that past them
+    /// wastes the reassurance it exists to give.
+    private static let restoreFloor: TimeInterval = 2.2
+
+    /// Hold until K2 has been readable, then let the caller move on.
+    private func holdRestoreFloor() async {
+        guard let started = restoreStartedAt else { return }
+        let remaining = Self.restoreFloor - Date().timeIntervalSince(started)
+        guard remaining > 0 else { return }
+        await pause(remaining)
     }
 
     /// K2's four rows, in the order the comp lists them. Held as a template so
@@ -588,7 +660,11 @@ final class AppViewModel: ObservableObject {
             RestoreStep(id: "account", title: "Account verified", state: .running),
             RestoreStep(id: "pair", title: "Finding your pair"),
             RestoreStep(id: "items", title: "Reminders & letters"),
-            RestoreStep(id: "mood", title: "Her mood & planned dates"),
+            // "Their", not the comp's "Her". This row names the real user's real
+            // partner, whoever they are — K3 and the Home card already say
+            // "their", and the live run showed K2 as the one screen still
+            // guessing. The comp's copy is written about its own example couple.
+            RestoreStep(id: "mood", title: "Their mood & planned dates"),
         ]
     }
 
@@ -634,7 +710,12 @@ final class AppViewModel: ObservableObject {
             } else {
                 // Never paired, or we could not reach the server. Fall through
                 // to the ordinary routing (Start-or-join), which retries on the
-                // next launch.
+                // next launch. Still held to the floor: a screen that appears
+                // and disappears between two frames is worse than one that took
+                // a moment and then moved on.
+                setStep("pair", .skipped)
+                setStepTitle("pair", "No pair found")
+                await holdRestoreFloor()
                 endRestore()
             }
 
@@ -707,6 +788,7 @@ final class AppViewModel: ObservableObject {
     }
 
     private func finishAsRejoined(space: FirebaseService.RecoveredSpace?) async {
+        await holdRestoreFloor()
         restoreSummary = RestoreCounting.summary(
             partnerName: coupleSpaceService.partner?.displayName ?? "your partner",
             pairedDays: space?.pairedDays,
@@ -725,6 +807,7 @@ final class AppViewModel: ObservableObject {
         // space we are still a member of has synced.
         syncNow()
         await waitForSyncToSettle(floor: 0.8, ceiling: 4.0)
+        await holdRestoreFloor()
         pairGone = RestoreCounting.keepsakes(partnerName: name,
                                              leftAt: leftAt,
                                              reminders: reminderService.reminders,

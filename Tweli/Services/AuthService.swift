@@ -61,7 +61,17 @@ final class AuthService: ObservableObject {
     /// so AuthService needs no Firebase import. Returns the Firebase UID + resolved
     /// display name.
     var exchangeCredential: ((_ idToken: String, _ rawNonce: String,
-                              _ fullName: PersonNameComponents?) async throws -> (uid: String, displayName: String))?
+                              _ fullName: PersonNameComponents?) async throws -> (uid: String, displayName: String, isNewAccount: Bool))?
+
+    /// Whether the account that just signed in already existed.
+    ///
+    /// Comps K2/K3 turn on this: a returning user has a thread to find, a
+    /// brand-new one does not, and "Finding your thread" shown to somebody who
+    /// has never had one is a promise the next screen has to break.
+    ///
+    /// `nil` until a sign-in completes in THIS session — a launch that restores
+    /// a persisted session knows nothing about how that account began.
+    @Published private(set) var signedInToExistingAccount: Bool?
 
     /// Wired by AppViewModel to `FirebaseService.signOut()` so signing out also tears
     /// down the Firebase Auth session.
@@ -116,8 +126,14 @@ final class AuthService: ObservableObject {
                         isSigningIn = false
                         return
                     }
-                    let (uid, name) = try await exchange(idToken, rawNonce, fullName)
-                    store(userId: uid, name: name.isEmpty ? fallbackName() : name)
+                    let result = try await exchange(idToken, rawNonce, fullName)
+                    // Set BEFORE `store`, because `store` flips `isSignedIn` and
+                    // that is what AppViewModel's subscriber reacts to. Written
+                    // the other way round, the restore decision would be made
+                    // against a stale (nil) value on every first sign-in.
+                    signedInToExistingAccount = !result.isNewAccount
+                    store(userId: result.uid,
+                          name: result.displayName.isEmpty ? fallbackName() : result.displayName)
                 } catch {
                     print("[Auth] Firebase credential exchange failed: \(error)")
                     failed("Couldn't finish signing in",
