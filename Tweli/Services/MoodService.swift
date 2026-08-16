@@ -65,27 +65,20 @@ final class MoodService: ObservableObject {
 
     // MARK: - Keep vs Dismiss (interstitial swipe, designs 22a/b)
 
-    private let collapsedMoodKey = "tweli.mood.collapsedToStrip"
+    /// Legacy key. It used to record "this mood was dismissed to the strip", and
+    /// Home read it to decide between the card and a one-line strip. The strip is
+    /// gone — L3/N3 rest on the full card, and a card that shrinks to a sentence
+    /// once you have read it makes Home reflow under you every time.
+    ///
+    /// Kept only so `clearLegacyCollapseState()` can remove it from devices that
+    /// already wrote one. Nothing reads its value any more.
+    private static let legacyCollapsedMoodKey = "tweli.mood.collapsedToStrip"
 
-    /// Right swipe = KEEP → the mood stays as the prominent card on Home.
-    /// Left swipe = DISMISS → it collapses to the quiet strip. Keyed to the mood's
-    /// timestamp so a NEWER partner mood starts fresh (card by default).
-    func setPartnerMoodKept(_ kept: Bool) {
-        guard let mood = partnerMood else { return }
-        if kept {
-            defaults.removeObject(forKey: collapsedMoodKey)
-        } else {
-            defaults.set(mood.updatedAt, forKey: collapsedMoodKey)
-        }
-        objectWillChange.send()   // Home re-picks card vs strip immediately
-    }
-
-    /// True when the CURRENT partner mood was dismissed to the strip. A newer mood
-    /// (different timestamp) reads as not-collapsed → the prominent card returns.
-    var partnerMoodCollapsed: Bool {
-        guard let mood = partnerMood,
-              let d = defaults.object(forKey: collapsedMoodKey) as? Date else { return false }
-        return abs(d.timeIntervalSince(mood.updatedAt)) < 1
+    /// Drop the stored collapse flag. Harmless to call repeatedly, and it means a
+    /// device that dismissed a mood under the old build does not carry a dead key
+    /// around forever.
+    func clearLegacyCollapseState() {
+        defaults.removeObject(forKey: Self.legacyCollapsedMoodKey)
     }
 
     /// Partner's mood across the last 7 days (oldest → newest) for the history bar.

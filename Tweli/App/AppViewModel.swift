@@ -135,7 +135,11 @@ final class AppViewModel: ObservableObject {
     /// card on Home; otherwise (left swipe / × / scrim) it collapses to the strip.
     func dismissFreshMood(keep: Bool) {
         moodService.acknowledgePartnerMood()
-        moodService.setPartnerMoodKept(keep)
+        // `keep` no longer changes anything on Home. It used to decide card vs
+        // one-line strip; the strip is gone and the card always rests in full,
+        // so both directions now mean the same thing — "I've seen it". The
+        // parameter stays because the interstitial still swipes both ways.
+        moodService.clearLegacyCollapseState()
         freshMood = nil
     }
 

@@ -4,13 +4,18 @@
 //
 //  The "new mood" interstitial (designs 22a/b): a warm, Tinder-style card that
 //  greets you on open when your partner has posted a new mood since you last
-//  looked. Drag it —
-//    • right  → KEEP: flings off, the mood stays as the prominent card on Home
-//    • left   → DISMISS: flings off, the mood collapses to the quiet strip
-//  Below the threshold it springs back. Tap the × or the scrim to dismiss.
+//  looked. Drag it either way to fling it off; below the threshold it springs
+//  back. Tap the × or the scrim to dismiss.
 //
 //  It is SILENT: nothing is sent to the partner, no receipt, no record of which
 //  way you swiped. The scrim fades and Home brightens as you drag.
+//
+//  NOTE — the two directions no longer differ. KEEP used to leave the mood as
+//  the prominent card on Home while DISMISS collapsed it to a one-line strip;
+//  the strip is gone (L3/N3 rest on the full card), so both now mean "seen".
+//  The stamps still read KEEP and DISMISS, which is a promise this screen can
+//  no longer keep — worth resolving, either by simplifying to a neutral
+//  fling-to-close or by giving KEEP something real to do.
 //
 
 import SwiftUI
@@ -20,9 +25,10 @@ struct MoodInterstitialView: View {
     let mood: MoodStatus
     let partnerName: String
     let partnerInitials: String
-    /// Right swipe — KEEP: leave the mood as the prominent card on Home.
+    /// Right swipe. Acknowledges the mood — see the note at the top of the file
+    /// for why this is no longer distinguishable from `onDismiss`.
     var onKeep: () -> Void
-    /// Left swipe / × / scrim tap — DISMISS: collapse the mood to the quiet strip.
+    /// Left swipe / × / scrim tap. Also acknowledges the mood.
     var onDismiss: () -> Void
 
     @State private var drag: CGSize = .zero

@@ -68,22 +68,27 @@ struct HomeMomentView: View {
 #endif
     }
 
-    // MARK: - Partner's mood (static resting card — the swipe lives on the interstitial)
+    // MARK: - Partner's mood (permanent resting card — the swipe lives on the interstitial)
 
+    /// One card, always the same size, for as long as there is a partner.
+    ///
+    /// It used to collapse to a one-line strip once the mood had been
+    /// acknowledged (designs 21a/b), which meant the most-looked-at thing on
+    /// Home shrank to a sentence and everything below it jumped up. L3/N3 draw
+    /// the full card at rest instead, so a mood arriving, changing, or simply
+    /// being read now only ever rewrites the words inside it.
+    ///
+    /// It also draws BEFORE the first mood ever arrives. An absent card and a
+    /// broken one look identical, and the layout should not shift the first time
+    /// the partner posts.
     @ViewBuilder private var moodMoment: some View {
-        if let mood = moods.partnerMood {
-            // Right-swipe KEEP (designs 22a/b) leaves the prominent card; a left-swipe
-            // DISMISS collapses to the quiet strip. A newer mood resets to the card.
-            if moods.partnerMoodCollapsed {
-                MoodStripView()
-            } else {
-                FreshMoodCardView(
-                    mood: mood,
-                    partnerName: app.partner?.displayName ?? "Your partner",
-                    partnerInitials: app.partner?.initials ?? "?",
-                    onTap: { app.requestedTab = 2 }          // open the Moods tab
-                )
-            }
+        if app.partner != nil {
+            FreshMoodCardView(
+                mood: moods.partnerMood,
+                partnerName: app.partner?.displayName ?? "Your partner",
+                partnerInitials: app.partner?.initials ?? "?",
+                onTap: { app.requestedTab = 2 }              // open the Moods tab
+            )
         }
     }
 
