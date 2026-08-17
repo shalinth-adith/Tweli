@@ -867,8 +867,12 @@ final class FirebaseService: ObservableObject {
         var payloadsByType: [String: [(data: Data, authorUid: String)]] = [:]     // keyed by RType
         var deletedIDs: [UUID] = []
         var partnerJoinedName: String? = nil           // set when the space doc shows member #2
-        /// Set when the OTHER member removed themselves from the space (comp E6).
+        /// Set when the OTHER member removed themselves from the space (comp M4).
         var partnerLeftName: String? = nil
+        /// When they closed their side, for M4's opening line. Absent on spaces
+        /// left by the offline client-side path, which stamps no time — the
+        /// sentence then simply starts at the part we can stand behind.
+        var partnerLeftAt: Date? = nil
         /// The partner's IANA zone, read off `memberTimezones` on the space doc.
         /// Their device writes it on every sync, so this is available even when
         /// they have never shared a location.
@@ -881,6 +885,28 @@ final class FirebaseService: ObservableObject {
         var partnerCity: String? = nil
         /// The partner's birthday from `memberBirthdays`, parsed from `yyyy-MM-dd`.
         var partnerBirthday: Date? = nil
+        /// When the partner's device last stopped being reachable (comp M5).
+        ///
+        /// Written server-side by `deliverPush` when a push bounces with a dead
+        /// token. This says the partner's device stopped accepting pushes at
+        /// that moment and NOTHING MORE — a deleted app produces it, but so
+        /// does a rotated token or a restore from backup. It is cleared the
+        /// instant they register a token again.
+        ///
+        /// Distinct from `partnerLeftName` in the way that matters: this member
+        /// is still in `memberUids`. They are still paired; they are merely
+        /// unreachable. Never present this as a departure.
+        var partnerQuietSince: Date? = nil
+        /// True only for batches built from the SPACE document.
+        ///
+        /// Needed because `partnerQuietSince` has to be able to say "cleared",
+        /// and a plain nil cannot: the item listeners emit a fresh
+        /// `RemoteChanges` on every payload write, where every space-derived
+        /// field is nil simply because that batch never looked at the space
+        /// doc. Without this flag the consumer cannot tell "they are reachable
+        /// again" from "this batch has no opinion", and an ordinary mood write
+        /// would silently dismiss comp M5.
+        var describesSpace = false
     }
 
     /// Pull the partner's bio, city and birthday out of a raw space document.
@@ -961,6 +987,7 @@ final class FirebaseService: ObservableObject {
             let members = data["memberUids"] as? [String] ?? []
             let names = data["memberNames"] as? [String: String] ?? [:]
             var changes = RemoteChanges()
+            changes.describesSpace = true
 
             // The partner walked out: they removed themselves and stamped
             // `leftBy`. We're the only member left, and the uid on the stamp is
@@ -979,6 +1006,7 @@ final class FirebaseService: ObservableObject {
                     .flatMap { $0.isEmpty ? nil : $0 }
                     ?? names[leftBy]
                     ?? "Your partner"
+                changes.partnerLeftAt = (data["leftAt"] as? Timestamp)?.dateValue()
                 onChange(changes)
                 return
             }
@@ -987,6 +1015,15 @@ final class FirebaseService: ObservableObject {
             let partnerUid = members.first { $0 != self.currentUid }
             let partnerName = names.first(where: { $0.key != self.currentUid })?.value ?? "Your partner"
             changes.partnerJoinedName = partnerName
+            // Comp M5. Note where this sits: AFTER the two-member guard, so it
+            // can only ever describe someone who is still in the space. The
+            // leave branch above returns early, which keeps the two states from
+            // ever being raised together — you cannot have left and be quiet.
+            if let partnerUid,
+               let quiet = data["quietSince"] as? [String: Any],
+               let stamp = quiet[partnerUid] as? Timestamp {
+                changes.partnerQuietSince = stamp.dateValue()
+            }
             // The same doc already carries each member's zone for the push
             // function's quiet hours; hand it to the client too.
             if let partnerUid {
@@ -1059,9 +1096,15 @@ final class FirebaseService: ObservableObject {
         guard !isDevOrOffline, let spaceId, let uid = currentUid else { return }
         do {
             try await db.collection("spaces").document(spaceId).updateData([
-                FieldPath(["fcmTokens", uid]): token
+                FieldPath(["fcmTokens", uid]): token,
+                // Registering a token is proof this device is reachable again, so
+                // it retires any `quietSince` the server wrote when a push last
+                // bounced. Without this, M5 would keep telling a partner our side
+                // is quiet long after we came back — the screen would be stuck on
+                // the moment we went away rather than tracking the truth.
+                FieldPath(["quietSince", uid]): FieldValue.delete()
             ])
-            log("stored FCM token for \(uid)")
+            log("stored FCM token for \(uid), cleared quietSince")
         } catch {
             log("updateFCMToken failed: \(error.localizedDescription)")
         }

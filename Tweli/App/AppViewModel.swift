@@ -117,6 +117,25 @@ final class AppViewModel: ObservableObject {
     /// can say who, not "your partner".
     @Published var partnerLeftName: String?
 
+    /// When they closed their side, for M4's opening line. Nil on the offline
+    /// client-side leave path, which stamps no time.
+    @Published var partnerLeftAt: Date?
+
+    /// When the partner's device stopped accepting pushes — drives comp M5,
+    /// "…'s side went quiet".
+    ///
+    /// Emphatically NOT a departure, and the screen must never read as one:
+    /// they are still in `memberUids`, the pair is intact, and anything sent
+    /// still waits for them. All this timestamp knows is that a push bounced
+    /// off a dead token at that moment — most often an uninstall, but equally a
+    /// rotated token or a restored phone. `M5` therefore says "quiet since",
+    /// never "deleted the app". Cleared automatically when they register a
+    /// token again.
+    ///
+    /// Mutually exclusive with `partnerLeftName` by construction: the listener
+    /// returns early on the leave branch, so the two can never be set together.
+    @Published var partnerQuietSince: Date?
+
     /// Drives the full-screen "Tying your thread…" waiting screen (design 19g/h)
     /// shown to the owner after they create a space, until their partner joins.
     @Published var showJoiningWaiter = false
@@ -905,6 +924,31 @@ final class AppViewModel: ObservableObject {
         cleanup = pendingCleanup
         restorePhase = phase
     }
+
+    /// Paint comp M4 or M5 for a headless capture. See RestoreCapturePreviews.
+    ///
+    /// Needed for the same reason as `applyRestoreCaptureState`: reaching either
+    /// screen for real takes a live paired space and a second device to walk out
+    /// of it (M4) or to uninstall from (M5), and the simulator can inject
+    /// neither the taps nor the dead push token.
+    ///
+    /// Clears the acknowledgement flag so a capture is never suppressed by a
+    /// previous run of itself.
+    func applyDepartureCaptureState(leftName: String? = nil,
+                                    leftAt: Date? = nil,
+                                    quietSince: Date? = nil,
+                                    quietPartnerName: String? = nil) {
+        Self.leftNoticeAcknowledged = false
+        if let leftName {
+            coupleSpaceService.updatePartnerName(leftName)
+            partnerLeftName = leftName
+            partnerLeftAt = leftAt
+        }
+        if let quietSince {
+            if let quietPartnerName { coupleSpaceService.updatePartnerName(quietPartnerName) }
+            partnerQuietSince = quietSince
+        }
+    }
 #endif
 
     /// Sign out WITHOUT leaving the shared space.
@@ -983,9 +1027,38 @@ final class AppViewModel: ObservableObject {
     /// back on Start-or-join so a fresh code can be minted.
     func startFreshAfterPartnerLeft() {
         partnerLeftName = nil
+        Self.leftNoticeAcknowledged = false   // a new thread gets to raise its own
         coupleSpaceService.disconnect()
         cloud.reset()
         listeningSpaceId = nil
+    }
+
+    /// M4's primary action — "Read their letters".
+    ///
+    /// Unlike `startFreshAfterPartnerLeft` this keeps the space connected. The
+    /// `leaveSpace` function goes out of its way to preserve letters the leaver
+    /// sealed for the person staying, and this button is where that promise is
+    /// collected. Disconnecting here would delete the very thing it offers.
+    func openLettersAfterPartnerLeft() {
+        Self.leftNoticeAcknowledged = true
+        partnerLeftName = nil
+        requestedTab = 3   // Letters
+    }
+
+    /// Whether M4 has already been dismissed for this departure.
+    ///
+    /// Persisted, because `leftBy` stays stamped on the space document forever:
+    /// the listener re-derives `partnerLeftName` from it on EVERY snapshot, so
+    /// an in-memory flag would let M4 reappear on the next sync, and a bare flag
+    /// would bring it back on every cold launch. Someone who has read their
+    /// letters and chosen not to start again yet should not be told once a day
+    /// that they were left.
+    ///
+    /// Cleared by `startFreshAfterPartnerLeft`, so a later departure from a new
+    /// thread is announced normally.
+    static var leftNoticeAcknowledged: Bool {
+        get { UserDefaults.standard.bool(forKey: "tweli.partnerLeft.acknowledged") }
+        set { UserDefaults.standard.set(newValue, forKey: "tweli.partnerLeft.acknowledged") }
     }
 
     /// Merge a batch of remote changes delivered by a snapshot listener into the
@@ -1001,8 +1074,26 @@ final class AppViewModel: ObservableObject {
         // no longer has two people in it.
         if let goneName = changes.partnerLeftName {
             coupleSpaceService.updatePartnerName(goneName)
-            partnerLeftName = goneName
+            // The name is applied either way — the Letters tab still needs to
+            // say who wrote them. Only the full-screen M4 scene is suppressed
+            // once it has been acknowledged; see `leftNoticeAcknowledged`.
+            if !Self.leftNoticeAcknowledged {
+                partnerLeftName = goneName
+                partnerLeftAt = changes.partnerLeftAt
+            }
             return
+        }
+        // Comp M5. Assigned straight across INCLUDING nil — but only for a batch
+        // that actually read the space document. Clearing is a real outcome
+        // here: the server deletes `quietSince` the moment the partner registers
+        // a token again, and that nil is what takes the screen down by itself.
+        //
+        // The `describesSpace` guard is what makes that safe. Item listeners
+        // emit their own RemoteChanges on every payload write with all
+        // space-derived fields nil, so assigning unconditionally would have let
+        // any incoming mood dismiss M5 while the partner was still unreachable.
+        if changes.describesSpace {
+            partnerQuietSince = changes.partnerQuietSince
         }
         if let zone = changes.partnerTimeZoneId { partnerDeviceTimeZoneId = zone }
         if let name = changes.partnerJoinedName {

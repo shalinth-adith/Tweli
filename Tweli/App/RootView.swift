@@ -116,9 +116,23 @@ struct RootView: View {
             ReinstallCleanupView()                                     // K4
                 .transition(.opacity)
         } else if let goneName = app.partnerLeftName {
-            // Comp E6. Sits above the tab bar rather than inside it: the
-            // space is half a thread now, and the tabs would be lying.
-            PartnerLeftView(partnerName: goneName)
+            // Comp M4 / ML4 (was E6). Sits above the tab bar rather than inside
+            // it: the space is half a thread now, and the tabs would be lying.
+            PartnerLeftView(partnerName: goneName, summary: partnerLeftSummary)
+                .transition(.opacity)
+        } else if let quietSince = app.partnerQuietSince {
+            // Comp M5 / ML5. Ranks BELOW M4 deliberately. If both could somehow
+            // be true, "they left" is the fact that matters and "their device
+            // stopped answering" is a detail of it. In practice the listener
+            // makes them mutually exclusive, and this ordering means a bug
+            // there degrades into the more important screen, not the softer one.
+            PartnerQuietView(partnerName: couple.partner?.displayName ?? "Your partner",
+                             quietSince: quietSince,
+                             lastCardEmoji: app.moodService.partnerMood?.mood.emoji,
+                             lastCardLabel: app.moodService.partnerMood?.displayLabel,
+                             lastCardAt: app.moodService.partnerMood?.updatedAt,
+                             lastCardPlace: couple.partner?.city,
+                             onWriteLetter: { app.requestedTab = 3 })
                 .transition(.opacity)
         } else if app.showTutorial {
             // Comp 0Z. Ahead of sign-in on purpose: it is the only chance to
@@ -144,5 +158,40 @@ struct RootView: View {
             MainTabView()
                 .transition(.opacity)
         }
+    }
+
+    /// The three facts M4 states about what survives a departure.
+    ///
+    /// Every field stays optional the whole way down. `PartnerLeftView` drops a
+    /// row it cannot answer rather than rendering a zero, so a space with no
+    /// letters shows two rows instead of claiming "0 letters they wrote you" —
+    /// which on that screen would read as an accusation.
+    private var partnerLeftSummary: PartnerLeftView.Summary {
+        var s = PartnerLeftView.Summary()
+
+        // Letters THEY wrote, which `leaveSpace` deliberately keeps. Matched on
+        // authorship rather than on the partner's profile id: profile UUIDs are
+        // device-local, so the locally-fabricated partner id never equals the
+        // author id inside a synced payload — the same trap MoodService.partnerMood
+        // documents.
+        let mine = couple.currentUser.id
+        let theirs = app.letterService.letters.filter { $0.createdBy != mine }
+        if !theirs.isEmpty { s.lettersKept = theirs.count }
+
+        if let mood = app.moodService.partnerMood {
+            s.lastCardLabel = mood.displayLabel
+            s.lastCardEmoji = mood.mood.emoji
+        }
+
+        if let start = couple.coupleSpace?.createdAt {
+            let cal = Calendar.current
+            let days = cal.dateComponents([.day],
+                                          from: cal.startOfDay(for: start),
+                                          to: cal.startOfDay(for: Date())).day ?? 0
+            if days > 0 { s.daysTogether = days }
+        }
+
+        s.leftAt = app.partnerLeftAt
+        return s
     }
 }

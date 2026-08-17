@@ -34,6 +34,7 @@ enum TweliNotification {
         static let mood = "tweli.mood"                  // RA8
         static let date = "tweli.date"                  // RA9
         static let completion = "tweli.completion"      // RA5 — no actions
+        static let left = "tweli.left"                  // M1/M2 — no actions
     }
 
     // MARK: - Actions
@@ -119,7 +120,16 @@ enum TweliNotification {
             identifier: Category.completion, actions: [],
             intentIdentifiers: [], options: [])
 
-        return [reminder, overdue, letter, mood, date, completion]
+        // M1 / M2 — a partner leaving the thread carries no actions either, for
+        // a different reason than RA5. There IS something to do about it, but
+        // every option (read their letters, start a new thread) is a decision
+        // that deserves the M4 screen and its context — not a button pressed
+        // half-awake from a lock screen.
+        let left = UNNotificationCategory(
+            identifier: Category.left, actions: [],
+            intentIdentifiers: [], options: [])
+
+        return [reminder, overdue, letter, mood, date, completion, left]
     }
 
     // MARK: - Copy (comps RA1–RA9)

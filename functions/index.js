@@ -92,9 +92,6 @@ exports.notifyPartnerOnItemWrite = onDocumentWritten(
       return;
     }
 
-    const recipientTz = (space.memberTimezones || {})[recipientUid];
-    const quiet = isQuietHour(recipientTz, prefs);
-
     // `notif.silent` marks a push that is news rather than a demand, and so
     // arrives without sound even outside quiet hours. Only the reminder
     // completion echo (RA5) uses it now: "they ticked something off" is worth
@@ -103,46 +100,90 @@ exports.notifyPartnerOnItemWrite = onDocumentWritten(
     // Mood changes USED to be in this bucket per RA8, and were moved out —
     // passive delivery made them undetectable in practice. See the `moods` case
     // in buildNotification for the reasoning.
-    const hush = quiet || notif.silent === true;
-    const aps = hush
-      ? { "mutable-content": 1, "interruption-level": "passive" } // no sound key
-      : { sound: "default", "mutable-content": 1 };
-    // The category is what gives a pulled-open notification its buttons
-    // (RA3/RA6/RA7/RA8/RA9). Without it iOS shows the text and nothing else.
-    if (notif.category) aps.category = notif.category;
-
-    const message = {
-      token,
-      notification: {
-        title: notif.title(authorName),
-        body: notif.body,
-      },
-      apns: { payload: { aps } },
-      // The client's didReceiveRemoteNotification uses this to nudge a sync /
-      // deep-link to the right tab.
-      data: { type: String(type), spaceId: String(spaceId), quiet: String(quiet) },
-    };
-
-    try {
-      await getMessaging().send(message);
-      console.log(`push sent: ${type} → ${recipientUid}`);
-    } catch (err) {
-      const code = err && err.code;
-      // Prune a dead token so we stop retrying it every write.
-      if (
-        code === "messaging/registration-token-not-registered" ||
-        code === "messaging/invalid-registration-token" ||
-        code === "messaging/invalid-argument"
-      ) {
-        await db
-          .doc(`spaces/${spaceId}`)
-          .update({ [`fcmTokens.${recipientUid}`]: FieldValue.delete() })
-          .catch(() => {});
-      }
-      console.error(`push failed (${type}):`, code, err && err.message);
-    }
+    await deliverPush({
+      db,
+      spaceId,
+      space,
+      recipientUid,
+      type,
+      title: notif.title(authorName),
+      body: notif.body,
+      category: notif.category,
+      silent: notif.silent === true,
+    });
   }
 );
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Send one push to one member of a space, applying that member's quiet hours.
+ *
+ * Extracted from notifyPartnerOnItemWrite so the leave announcement (M1/M2) can
+ * reuse it. A leave is not an item write — it updates the space document itself
+ * — so it can never reach the onDocumentWritten trigger above.
+ *
+ * `space` must be the already-read space document data. The caller does the
+ * per-type preference check (`wantsType`); this function does not, because not
+ * every push is a type a member is allowed to switch off.
+ */
+async function deliverPush({
+  db, spaceId, space, recipientUid, type, title, body, category, silent,
+}) {
+  const token = (space.fcmTokens || {})[recipientUid];
+  if (!token) return; // recipient has no registered device
+
+  const prefs = ((space.notificationPrefs || {})[recipientUid]) || {};
+  const recipientTz = (space.memberTimezones || {})[recipientUid];
+  const quiet = isQuietHour(recipientTz, prefs);
+
+  const hush = quiet || silent === true;
+  const aps = hush
+    ? { "mutable-content": 1, "interruption-level": "passive" } // no sound key
+    : { sound: "default", "mutable-content": 1 };
+  // The category is what gives a pulled-open notification its buttons
+  // (RA3/RA6/RA7/RA8/RA9). Without it iOS shows the text and nothing else.
+  if (category) aps.category = category;
+
+  const message = {
+    token,
+    notification: { title, body },
+    apns: { payload: { aps } },
+    // The client's didReceiveRemoteNotification uses this to nudge a sync /
+    // deep-link to the right tab.
+    data: { type: String(type), spaceId: String(spaceId), quiet: String(quiet) },
+  };
+
+  try {
+    await getMessaging().send(message);
+    console.log(`push sent: ${type} → ${recipientUid}`);
+  } catch (err) {
+    const code = err && err.code;
+    // Prune a dead token so we stop retrying it every write.
+    if (
+      code === "messaging/registration-token-not-registered" ||
+      code === "messaging/invalid-registration-token" ||
+      code === "messaging/invalid-argument"
+    ) {
+      await db
+        .doc(`spaces/${spaceId}`)
+        .update({
+          [`fcmTokens.${recipientUid}`]: FieldValue.delete(),
+          // M5 ("their side went quiet"). A dead token is the ONLY signal iOS
+          // gives us that an app is no longer installed — but it is not proof
+          // of that. It also fires on token rotation, a restore from backup, or
+          // an app left unopened long enough to be evicted. So we record only
+          // WHEN the device stopped being reachable, never a reason. The screen
+          // built on this says "quiet since <date>" and must never claim to
+          // know that anyone deleted anything. Same rule as K5, which is only
+          // reachable from a SUCCESSFUL query and never infers a departure.
+          [`quietSince.${recipientUid}`]: FieldValue.serverTimestamp(),
+        })
+        .catch(() => {});
+    }
+    console.error(`push failed (${type}):`, code, err && err.message);
+  }
+}
 
 // ---------------------------------------------------------------------------
 
@@ -594,6 +635,34 @@ exports.leaveSpace = onRequest(async (req, res) => {
         leftBy: uid,
         leftAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // M1 / M2 — tell the person still here.
+      //
+      // Until now a departure was silent: the space document changed, and you
+      // found out only when you next opened the app and M4 appeared. Nobody
+      // should discover this by noticing things had quietly stopped working.
+      //
+      // `data` is the PRE-update snapshot on purpose. The update above deletes
+      // the LEAVER's token; the remaining member's token is untouched, and
+      // reading it from `data` avoids a second round-trip for a document we
+      // already hold.
+      //
+      // Deliberately NOT gated by wantsType(): those switches cover moods,
+      // letters, reminders and dates — content you might reasonably mute. A
+      // partner leaving is structural, not a content type, and no setting
+      // should be able to hide it. Quiet hours still apply, so a 3am departure
+      // arrives without a sound rather than not at all.
+      const leftName = (data.memberNames || {})[uid] || "Your partner";
+      await deliverPush({
+        db,
+        spaceId,
+        space: data,
+        recipientUid: remaining[0],
+        type: "left",
+        title: `${leftName} left the thread`,
+        body: "No new cards or letters. What they wrote you is still here.",
+        category: "tweli.left",
       });
     }
 

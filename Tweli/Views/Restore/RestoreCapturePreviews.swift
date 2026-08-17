@@ -59,6 +59,19 @@ enum RestoreCapture {
         case "k3": app.applyRestoreCaptureState(phase: .rejoined, summary: summary)
         case "k4": app.applyRestoreCaptureState(phase: .cleanup, pendingCleanup: bothMissing)
         case "k5": app.applyRestoreCaptureState(phase: .pairGone, gone: gone)
+        // M4 / ML4. `leftAt` is set to earlier the same day so the opening line
+        // exercises its "this morning" branch rather than the fallback.
+        case "m4":
+            app.applyDepartureCaptureState(
+                leftName: "PLACEHOLDER_Partner",
+                leftAt: Calendar.current.date(bySettingHour: 9, minute: 20, second: 0,
+                                              of: Date()))
+        // M5 / ML5. Four days matches the comp, and lands in the "N days ago"
+        // band rather than the "today"/"yesterday" special cases.
+        case "m5":
+            app.applyDepartureCaptureState(
+                quietSince: Calendar.current.date(byAdding: .day, value: -4, to: Date()),
+                quietPartnerName: "PLACEHOLDER_Partner")
         default: break
         }
     }
