@@ -46,7 +46,14 @@ enum AppEnvironment {
         // Capturing the tutorial means forcing its gate back OPEN. It is shown
         // once per install, so without this the second capture onwards lands
         // wherever the previous launch left the app.
-        if env["TWELI_TUTORIAL_PAGE"] != nil {
+        // On its own this stages the tutorial and stops there, which is all a
+        // still capture needs. COMBINED with TWELI_SKIP_ONBOARDING it keeps
+        // going and also lays down the session and space, so finishing the
+        // tutorial lands on a populated Home in the SAME app session — the one
+        // continuous arc an App Store preview video has to show. Recording it
+        // as two launches would put a relaunch in the middle of the film.
+        let wantsTutorial = env["TWELI_TUTORIAL_PAGE"] != nil
+        if wantsTutorial && env["TWELI_SKIP_ONBOARDING"] != "1" {
             d.set(false, forKey: TutorialGate.key)
             return
         }
@@ -130,6 +137,11 @@ enum AppEnvironment {
             // route straight past the profile flow and the join screen.
             d.removeObject(forKey: "tweli.coupleSpace")
         }
+
+        // LAST, because the block above authoritatively writes this key closed.
+        // Re-opening it here is what lets the preview recording play the
+        // tutorial first and then fall through to a signed-in, populated Home.
+        if wantsTutorial { d.set(false, forKey: TutorialGate.key) }
     }
 #endif
 }
