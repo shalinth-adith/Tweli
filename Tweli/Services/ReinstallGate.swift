@@ -83,6 +83,21 @@ struct ReinstallGate {
     /// `hadPair` — a reinstall must not forget that this device was paired.
     func markInstalled() {
         defaults.set(true, forKey: Self.defaultsKey)
+        // Forced to disk, deliberately.
+        //
+        // UserDefaults flushes on its own schedule. Force-quitting the app
+        // before that flush lands loses the key — and a missing container key
+        // next to a live Keychain record is EXACTLY the signature of a
+        // reinstall, so the whole K1–K5 flow ran again on an ordinary relaunch.
+        // Reported from a real device: reinstall, use the app, force-quit,
+        // reopen, and the welcome-back sequence played a second time.
+        //
+        // `synchronize()` is deprecated for routine use and correctly so, but
+        // this is the one case it exists for: a single small write whose loss
+        // changes what screen the user sees, on a path where the process may be
+        // killed seconds later.
+        defaults.synchronize()
+
         guard current() == nil else { return }
         write(Record(hadPair: false))
     }

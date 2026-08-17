@@ -115,7 +115,35 @@ struct ReinstallGateTests {
                 == .reinstall(hadPair: true))
     }
 
-    // 6 — EDGE: deleting the account wipes the marker, so the next install is a
+    // 6 — REGRESSION (reported from a real device): reinstall, use the app,
+    // force-quit, reopen — and the whole K1–K5 flow played a SECOND time.
+    //
+    // The cause was that claiming the install writes a UserDefaults key which
+    // flushes asynchronously; a force-quit before the flush lost it, and a
+    // missing container key beside a live Keychain record is indistinguishable
+    // from a reinstall. This asserts the contract that matters: once an install
+    // is claimed, EVERY later launch of it is ordinary. The durability of that
+    // write is what `markInstalled()` forces.
+    @Test("regression: a claimed install stays claimed across later launches")
+    func claimedInstallNeverReplaysTheFlow() {
+        let defaults = scratch("replay")
+        let keychain = InMemoryKeychain()
+
+        // Launch 1 — the reinstall itself. Classified, then claimed.
+        let first = ReinstallGate(defaults: defaults, store: keychain)
+        first.markInstalled()
+        first.markPaired()
+
+        // Launches 2..n — force-quit and reopened repeatedly. Every one of them
+        // must read as ordinary; a single `.reinstall` here is the bug.
+        for _ in 0..<5 {
+            let relaunch = ReinstallGate(defaults: defaults, store: keychain)
+            #expect(relaunch.launch == .sameInstall)
+            relaunch.markInstalled()
+        }
+    }
+
+    // 7 — EDGE: deleting the account wipes the marker, so the next install is a
     // genuine first install. Without this a brand-new user on a recycled device
     // would be greeted with "welcome back" — and, worse, routed to K5.
     @Test("edge: forgetting the account resets to a first install")

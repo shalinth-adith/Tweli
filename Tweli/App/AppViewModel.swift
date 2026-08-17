@@ -62,6 +62,19 @@ final class AppViewModel: ObservableObject {
         return false
     }
 
+    /// Record that this install has been seen, so the next launch is ordinary.
+    ///
+    /// Separate from `init` on purpose. `init` runs several times per launch on
+    /// the instances SwiftUI discards; this runs once, from the view that
+    /// actually survives. Doing it in `init` meant a discarded instance could
+    /// claim the install while the kept one had already classified the launch as
+    /// `.sameInstall` — the two halves of the decision made by different objects.
+    ///
+    /// Idempotent, so calling it from a `.task` that may re-run is safe.
+    func claimInstall() {
+        reinstallGate.markInstalled()
+    }
+
     @Published private(set) var restorePhase: RestorePhase = .none
     /// K2's checklist, rebuilt as each stage resolves.
     @Published private(set) var restoreSteps: [RestoreStep] = []
@@ -230,16 +243,17 @@ final class AppViewModel: ObservableObject {
     let locationService: LocationService
 
     init() {
-        // A local gate, not `self.reinstallGate`: `launch` is a `let` with no
-        // default, so nothing on `self` may be read until it is assigned. The
-        // type is stateless, so a second instance is free.
+        // A pure READ, and nothing else. A local gate because `launch` is a
+        // `let` with no default, so nothing on `self` may be touched until it
+        // is assigned; the type is stateless, so a second instance is free.
         //
-        // Read before writing. `markInstalled()` is what makes the FOLLOWING
-        // launch ordinary, so the classification has to be taken first and then
-        // held for the whole session.
-        let gate = ReinstallGate()
-        launch = gate.launch
-        gate.markInstalled()
+        // The matching WRITE deliberately does not happen here — see
+        // `claimInstall()`. `init` runs more than once per launch (SwiftUI
+        // evaluates `@StateObject var app = AppViewModel()` eagerly and discards
+        // the extra instances), so a write here would be performed by instances
+        // that are then thrown away, and `launch` would read `.sameInstall` on
+        // whichever instance SwiftUI happened to keep.
+        launch = ReinstallGate().launch
 
         coupleSpaceService = CoupleSpaceService(cloud: cloud)
         reminderService = ReminderService(notifications: notifications, cloud: cloud)

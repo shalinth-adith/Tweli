@@ -11,6 +11,13 @@
 //  Every case below pins `now` explicitly, so these do not start failing at
 //  midnight or in a different timezone.
 //
+//  That pinning only works because `timingTag` measures "today" against the
+//  `now` it is GIVEN. It originally used `Calendar.isDateInToday`, which reads
+//  the system clock and ignores `now` — so these tests passed on the day they
+//  were written and failed the next morning, when the date they had pinned as
+//  "today" became yesterday. The failure was real: the function was impure in
+//  its own parameter. Do not reintroduce `isDateInToday` here.
+//
 
 import Testing
 import Foundation

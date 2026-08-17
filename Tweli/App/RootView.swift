@@ -61,6 +61,10 @@ struct RootView: View {
             // but the screen itself (K2), and doing it here first would leave
             // that screen with nothing left to find — including the `createdAt`
             // K3 needs for "Paired 214 days".
+            // Claim the install from the instance that actually survives, not
+            // from `init` (which SwiftUI runs on throwaway instances too). Must
+            // happen on every launch, before anything can be force-quit out of.
+            app.claimInstall()
 #if DEBUG
             RestoreCapture.applyIfNeeded(to: app)
 #endif

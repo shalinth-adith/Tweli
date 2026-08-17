@@ -95,9 +95,14 @@ exports.notifyPartnerOnItemWrite = onDocumentWritten(
     const recipientTz = (space.memberTimezones || {})[recipientUid];
     const quiet = isQuietHour(recipientTz, prefs);
 
-    // `notif.silent` is the comps' own rule for two kinds of push: a completion
-    // echo (RA5) and a mood change (RA8). Both arrive without sound or badge
-    // even outside quiet hours — they are news, not demands.
+    // `notif.silent` marks a push that is news rather than a demand, and so
+    // arrives without sound even outside quiet hours. Only the reminder
+    // completion echo (RA5) uses it now: "they ticked something off" is worth
+    // knowing and never worth interrupting for.
+    //
+    // Mood changes USED to be in this bucket per RA8, and were moved out —
+    // passive delivery made them undetectable in practice. See the `moods` case
+    // in buildNotification for the reasoning.
     const hush = quiet || notif.silent === true;
     const aps = hush
       ? { "mutable-content": 1, "interruption-level": "passive" } // no sound key
@@ -216,16 +221,29 @@ function buildNotification(type, afterData, beforeData, isCreate) {
   switch (type) {
     case "moods": {
       // Notify on create AND update — a changed mood is the whole point.
-      // RA8: "Anaya is feeling worn out". Silent and never repeated — one per
-      // change — so the category carries no sound and the client presents it
-      // without one.
+      // RA8: "Anaya is feeling worn out".
+      //
+      // NOT silent. The comp asks for these to arrive "silently and never
+      // repeat", and that was implemented as `silent: true` → no sound key and
+      // interruption-level "passive". Faithful, and wrong in practice: a passive
+      // push never plays a sound, never lights the screen and never banners
+      // while the phone is in use. It lands in Notification Center and is found
+      // hours later, which is indistinguishable from never arriving — reported
+      // from a real device as "the mood notification is not coming".
+      //
+      // A mood is the single most time-sensitive thing this app carries. It is
+      // the one push that should behave like a message.
+      //
+      // "Never repeat" is unaffected and still holds: this fires once per
+      // change, because it is keyed to a document write. Quiet hours are also
+      // unaffected — `hush` is still true overnight in the RECIPIENT's own
+      // timezone, so a 3am mood change still arrives without a sound.
       const label = (MOOD_LABELS[p.mood] || "a new mood").toLowerCase();
       const body = trimmed(p.note, "Tap to see how they're feeling.");
       return {
         title: (name) => `${name} is feeling ${label}`,
         body,
         category: "tweli.mood",
-        silent: true,
       };
     }
 

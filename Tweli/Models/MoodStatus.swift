@@ -66,8 +66,22 @@ struct MoodStatus: Identifiable, Codable, Hashable, LocallyAuthored {
                                     timeZone: calendar.timeZone)
         let time = date.formatted(base.hour(.defaultDigits(amPM: .abbreviated)).minute())
 
-        if calendar.isDateInToday(date) { return time }                  // "8:12 AM" — the comp
-        if calendar.isDateInYesterday(date) { return "Yesterday \(time)" }
+        // "Today" and "yesterday" are measured against the PASSED `now`, not
+        // against the system clock.
+        //
+        // `isDateInToday`/`isDateInYesterday` read the real current date and
+        // ignore `now` entirely, which quietly made this function impure in its
+        // own parameter. Production always passes `Date()` so the output was
+        // right — but the seam was a lie, and the tests that relied on it began
+        // failing the moment the date rolled over: a case pinned to "16 August
+        // 10:34" asserted a same-day tag, and the next morning 16 August was
+        // yesterday. A test that only passes on the day it was written is not
+        // testing anything.
+        if calendar.isDate(date, inSameDayAs: now) { return time }       // "8:12 AM" — the comp
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
+           calendar.isDate(date, inSameDayAs: yesterday) {
+            return "Yesterday \(time)"
+        }
 
         // Inside the last week a weekday is easier to place than a date.
         if let days = calendar.dateComponents([.day],
