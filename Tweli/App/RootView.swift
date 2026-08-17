@@ -67,6 +67,9 @@ struct RootView: View {
             app.claimInstall()
 #if DEBUG
             RestoreCapture.applyIfNeeded(to: app)
+            // App Store screenshots need a populated space; the shipping build
+            // deliberately has no seeded content. See StoreCapturePreviews.
+            StoreCapture.applyIfNeeded(to: app, couple: couple)
 #endif
             guard !app.isReinstall else { return }
             await app.recoverSpaceIfNeeded()
