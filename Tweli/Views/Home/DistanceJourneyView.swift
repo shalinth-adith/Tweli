@@ -22,6 +22,30 @@ struct DistanceJourneyView: View {
     let daysTogether: Int?
     let daysToGo: Int?
 
+    /// Where the two of you actually are, in degrees.
+    ///
+    /// These used to not exist, and the pins, the arc and the plane were all
+    /// drawn at the hardcoded `GlobeGeometry.puducherry` / `.abuDhabi` from the
+    /// original design comp — while the LABELS beside them used the real city
+    /// names. Every couple therefore saw the same two dots over India and the
+    /// UAE wearing their own cities' names, and the arc between them was a
+    /// route neither of them had ever taken. The distance tile was correct
+    /// throughout, which is what kept it hidden.
+    ///
+    /// Nil falls back to the design's own pair, so a space where nobody has
+    /// shared a location still draws the illustration it always did.
+    var myCoord: (lon: Double, lat: Double)? = nil
+    var partnerCoord: (lon: Double, lat: Double)? = nil
+
+    /// The globe's ROTATION is still fixed: `GlobeGeometry.json` ships a
+    /// coastline already projected around centre (67.1, 18.19), so it cannot be
+    /// re-centred without re-projecting the map at runtime. Points on the far
+    /// hemisphere are correctly clipped by `project(_:_:).visible`, which means
+    /// a genuinely antipodal pair still cannot both be drawn. Fixing that needs
+    /// raw GeoJSON in the bundle rather than a baked path.
+    private var myPoint: (lon: Double, lat: Double) { myCoord ?? GlobeGeometry.puducherry }
+    private var partnerPoint: (lon: Double, lat: Double) { partnerCoord ?? GlobeGeometry.abuDhabi }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var planeStart = Date()
@@ -112,10 +136,8 @@ struct DistanceJourneyView: View {
 
     /// The full 300×264 artwork.
     private var art: some View {
-        let pud = GlobeGeometry.project(lon: GlobeGeometry.puducherry.lon,
-                                        lat: GlobeGeometry.puducherry.lat).point   // blue — you
-        let abu = GlobeGeometry.project(lon: GlobeGeometry.abuDhabi.lon,
-                                        lat: GlobeGeometry.abuDhabi.lat).point      // red  — partner
+        let pud = GlobeGeometry.project(lon: myPoint.lon, lat: myPoint.lat).point       // blue — you
+        let abu = GlobeGeometry.project(lon: partnerPoint.lon, lat: partnerPoint.lat).point // red — partner
         return ZStack {
             GlobeCanvas(dark: scheme == .dark)
 
@@ -230,7 +252,7 @@ struct DistanceJourneyView: View {
         var started = false
         let n = 80
         for i in 0...n {
-            let g = GlobeGeometry.interpolate(GlobeGeometry.puducherry, GlobeGeometry.abuDhabi,
+            let g = GlobeGeometry.interpolate(myPoint, partnerPoint,
                                               Double(i) / Double(n))
             let pr = GlobeGeometry.project(lon: g.lon, lat: g.lat)
             guard pr.visible else { started = false; continue }

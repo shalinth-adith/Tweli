@@ -54,7 +54,8 @@ enum StoreCapture {
 
     /// The partner every store screenshot shows.
     static let partnerName = "Anaya"
-    private static let partnerCity = "Bengaluru"
+    /// Must agree with the seeded location below.
+    private static let partnerCity = "London"
 
     /// Seeds a populated space, or does nothing.
     ///
@@ -71,7 +72,7 @@ enum StoreCapture {
         applied = true
 
         couple.updatePartnerName(partnerName)
-        couple.updatePartnerDetails(bio: "Three and a half hours ahead of you.",
+        couple.updatePartnerDetails(bio: "Four and a half hours behind you.",
                                     city: partnerCity,
                                     birthday: nil)
 
@@ -83,12 +84,51 @@ enum StoreCapture {
         // months still reads "2h ago" rather than a stale date. The mood is the
         // one that matters: the Home card's timing tag would otherwise announce
         // the exact day these fixtures were written.
+        // The mood is the single most photographed element in the listing, so it
+        // carries the warmest line we have rather than the saddest. "Missing
+        // you" over a note about an empty bed is honest to the product and a
+        // poor advertisement for it — the first screenshot should make someone
+        // want the app, not feel the distance in it.
         app.moodService.mergeRemote([
-            MoodStatus(userId: them, mood: .missingYou,
-                       note: "Reached Bengaluru. Your side of the bed came with me somehow.",
+            MoodStatus(userId: them, mood: .excitedToMeet,
+                       note: "Counted it out on my fingers twice. Forty-one days.",
                        updatedAt: ago(minutes: 42)),
-            MoodStatus(userId: me, mood: .thinkingOfYou,
+            MoodStatus(userId: me, mood: .content,
                        updatedAt: ago(hours: 3)),
+        ], deletedIDs: [])
+
+        // Two locations in two countries, which turns Home's "Share location"
+        // prompt into a live distance readout and gives the globe sheet a real
+        // route: London to Bengaluru, about 8,000 km.
+        //
+        // This pair only renders correctly because DistanceJourneyView now
+        // projects the coordinates it is given. It used to draw every couple at
+        // a hardcoded India–UAE pair while labelling those dots with the real
+        // city names, and the first capture run with these two cities is what
+        // exposed it.
+        //
+        // The globe's ROTATION is still fixed (a pre-projected coastline in
+        // GlobeGeometry.json), so both cities must fall on the hemisphere it
+        // shows. London and Bengaluru both do. Somewhere like Chile would be
+        // clipped — see the note in DistanceJourneyView.
+        // "You" is in Bengaluru, not London, and that is deliberate: several
+        // surfaces label your own times with the DEVICE's zone (the Dates sheet
+        // prints "YOU · IST"), and the capture simulator runs on IST. Putting
+        // your pin in London produced a screenshot that said you were in London
+        // and stamped your times IST — a contradiction a careful reader spots.
+        // The partner carries the far-away city instead, which is also the more
+        // natural read: you are the one holding the phone.
+        app.locationService.mergeRemote([
+            SharedLocation(userId: me,
+                           latitude: 12.9716, longitude: 77.5946,
+                           cityLabel: "Bengaluru",
+                           timeZoneId: "Asia/Kolkata",
+                           updatedAt: ago(minutes: 12)),
+            SharedLocation(userId: them,
+                           latitude: 51.5072, longitude: -0.1276,
+                           cityLabel: "London",
+                           timeZoneId: "Europe/London",
+                           updatedAt: ago(minutes: 20)),
         ], deletedIDs: [])
 
         app.letterService.mergeRemote([
@@ -110,7 +150,7 @@ enum StoreCapture {
 
         app.reminderService.mergeRemote([
             ReminderItem(title: "Call before her stand-up",
-                         note: "She is three and a half hours ahead.",
+                         note: "Her morning starts when your afternoon does.",
                          createdBy: them, coupleSpaceId: space,
                          reminderDate: fromNow(hours: 5),
                          repeatType: .weekly, priority: .important),

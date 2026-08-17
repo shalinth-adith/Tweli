@@ -78,26 +78,36 @@ enum RestoreCapture {
 
     // MARK: - Stand-in states
 
+    /// `PLACEHOLDER_Partner` for verification captures, where an obviously fake
+    /// name is the whole point — but the store listing photographs this same
+    /// restore screen, and "Pair found — PLACEHOLDER_Partner" cannot ship. When
+    /// TWELI_CAPTURE is set, borrow the store fixture's name instead.
+    private static var standInName: String {
+        ProcessInfo.processInfo.environment["TWELI_CAPTURE"] == "1"
+            ? StoreCapture.partnerName
+            : "PLACEHOLDER_Partner"
+    }
+
     /// K2 mid-sequence: two rows settled, one working, one still to come. That
     /// combination is the interesting frame and also the hardest to catch live.
-    private static let steps: [RestoreStep] = [
+    private static var steps: [RestoreStep] { [
         RestoreStep(id: "account", title: "Account verified", state: .done),
-        RestoreStep(id: "pair", title: "Pair found — PLACEHOLDER_Partner",
+        RestoreStep(id: "pair", title: "Pair found — \(standInName)",
                     detail: "214 days", state: .done),
         RestoreStep(id: "items", title: "Reminders & letters",
                     detail: "18 of 24", state: .running),
         RestoreStep(id: "mood", title: "Their mood & planned dates"),
-    ]
+    ] }
 
     /// K3 with all four stat rows populated, which is the layout worth checking.
-    private static let summary = RestoreSummary(
-        partnerName: "PLACEHOLDER_Partner",
+    private static var summary: RestoreSummary { RestoreSummary(
+        partnerName: standInName,
         pairedDays: 214,
         reminders: 24, openReminders: 6,
         letters: 6, sealedLetters: 1,
         partnerMood: "PLACEHOLDER_Mood",
         plannedDates: 2,
-        nextDate: nil)
+        nextDate: nil) }
 
     /// K4's widest case. The single-row variants are the same view with one card
     /// removed, and the copy for those is covered by `intro`'s switch.
@@ -107,10 +117,10 @@ enum RestoreCapture {
     /// K5 with a name and keepsakes — the version that has to read as news
     /// rather than an error. `leftAt` is nil on purpose: it exercises the branch
     /// where the date is missing and the sentence has to hold up without it.
-    private static let gone = PairGoneDetail(partnerName: "PLACEHOLDER_Partner",
+    private static var gone: PairGoneDetail { PairGoneDetail(partnerName: standInName,
                                              leftAt: nil,
                                              lettersKept: 6,
-                                             remindersKept: 12)
+                                             remindersKept: 12) }
 }
 
 #endif

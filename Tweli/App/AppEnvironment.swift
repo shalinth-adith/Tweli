@@ -107,10 +107,20 @@ enum AppEnvironment {
             // An empty space so the tab bar is reachable. This is app STATE, not
             // content: no partner, no moods, no reminders, no letters, no dates —
             // which is exactly the comp's E5 "half a thread" state.
-            if d.data(forKey: "tweli.coupleSpace") == nil {
-                let space = CoupleSpace(title: "Our space",
+            // TWELI_CAPTURE backdates the space so "days together" is a real
+            // number. A space created microseconds ago reports 0, and "0 days
+            // together" on the distance sheet is the single worst stat an App
+            // Store screenshot could carry. Rewritten every launch rather than
+            // only when absent, so the count cannot drift with a stale space
+            // left behind by an earlier run.
+            let capturing = env["TWELI_CAPTURE"] == "1"
+            if capturing || d.data(forKey: "tweli.coupleSpace") == nil {
+                var space = CoupleSpace(title: "Our space",
                                         createdBy: UUID(),
                                         partnerIds: [])
+                if capturing {
+                    space.createdAt = Date().addingTimeInterval(-214 * 86400)
+                }
                 if let data = try? JSONEncoder().encode(space) {
                     d.set(data, forKey: "tweli.coupleSpace")
                 }

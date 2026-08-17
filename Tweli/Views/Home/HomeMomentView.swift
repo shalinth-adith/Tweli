@@ -52,7 +52,12 @@ struct HomeMomentView: View {
                 partnerCity: location.partnerLocation?.cityLabel ?? "Them",
                 distanceLabel: location.distanceApartLabel ?? "—",
                 daysTogether: daysTogether,
-                daysToGo: reunionDays
+                daysToGo: reunionDays,
+                // The globe drew a fixed India–UAE route for everyone until
+                // these were passed through; the labels were real and the dots
+                // beneath them were not.
+                myCoord: location.myLocation.map { (lon: $0.longitude, lat: $0.latitude) },
+                partnerCoord: location.partnerLocation.map { (lon: $0.longitude, lat: $0.latitude) }
             )
         }
 #if DEBUG
