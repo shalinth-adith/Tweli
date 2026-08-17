@@ -124,6 +124,10 @@ device.
 Work top to bottom. Anything unchecked blocks the upload.
 
 ### Build
+- [ ] **Do NOT pre-check the signing certificate with `security find-identity`.**
+      It will report the distribution certificate as missing even when signing
+      works perfectly. See §6 — the only trustworthy check is the exported
+      `.ipa`'s own signature, below.
 - [ ] `MARKETING_VERSION` set for this release (the build number is automatic — §6)
 - [ ] Release build is clean: `xcodebuild -scheme Tweli -configuration Release build`
 - [ ] Tests pass: `xcodebuild test -scheme Tweli -destination '<simulator>'`
@@ -183,6 +187,57 @@ wrong profile.
 
 Signing identity in use: `Apple Distribution: Shalinth Adithyan (649T62WKAQ)`,
 via the cached `iOS Team Store Provisioning Profile: me.adithyan.shalinth.Tweli`.
+
+### `security find-identity` CANNOT see this certificate — do not trust it
+
+This cost an hour on 2026-08-17, so it is worth stating flatly:
+
+```
+$ security find-identity -v -p codesigning
+  ... "Apple Distribution: Fatbox LLC (B3XL3C9DD9)"     <- a DIFFERENT team
+      4 valid identities found                          <- ours is not among them
+```
+
+That output is **not** evidence of a problem. `security find-certificate -a -Z`
+also fails to find it, and Keychain Access's Certificates / My Certificates /
+Keys tabs all show nothing for "Shalinth Adithyan" beyond a development key.
+Every one of those tools uses the legacy keychain API.
+
+Xcode 16 keeps automatically-managed signing assets in the **data-protection
+keychain**, which the legacy `security(1)` tooling cannot enumerate. The
+certificate and its private key are present and usable by Xcode; they are simply
+invisible from the command line. On 2026-08-17 an export signed cleanly with
+`09B0CC79DACF99C6143D9B9AA3229E8DBB9092C7` minutes after every CLI check
+insisted that certificate did not exist.
+
+**The only trustworthy check is the artifact.** Export, then read the signature
+off the `.ipa`:
+
+```bash
+codesign -dvvv /tmp/tweli-ipa/Payload/Tweli.app 2>&1 | grep -E "Authority|TeamIdentifier"
+```
+
+Expected:
+```
+Authority=Apple Distribution: Shalinth Adithyan (649T62WKAQ)
+TeamIdentifier=649T62WKAQ
+```
+
+To confirm the exact certificate rather than just its name — names are not
+unique, fingerprints are:
+
+```bash
+codesign -d --extract-certificates=/tmp/sigcert- /tmp/tweli-ipa/Payload/Tweli.app
+openssl x509 -inform DER -in /tmp/sigcert-0 -noout -subject -fingerprint -sha1
+```
+
+Expected SHA-1 `09:B0:CC:79:...:92:C7`, matching the certificate the store
+profile pins.
+
+> `~/Downloads/distribution.p12` is a backup of this identity. It was NOT needed
+> on 2026-08-17, and its password is not known — do not burn time on it. If the
+> identity is ever genuinely lost, the recovery is to mint a new certificate and
+> regenerate the store profile, which is an account-level change.
 
 ### Build numbers are managed by Xcode, not by the project
 
