@@ -110,12 +110,33 @@ device.
 | Field | Value |
 |---|---|
 | Privacy Policy URL | `https://tweli-9a99e.web.app/privacy` |
-| Support URL | `https://tweli-9a99e.web.app/` |
-| Marketing URL | `https://tweli-9a99e.web.app/` (optional) |
+| Support URL | `https://tweli-9a99e.web.app/support` |
+| Marketing URL | **Leave blank for 1.0.** The landing page's install button still points at TestFlight, so a Marketing URL would take a visitor off the product page and offer them a beta. Fill it in when `INSTALL_URL` is swapped to the App Store link — all four URL fields are editable on a live app without a new build |
 | Sign-in required | Yes — see notes above; no demo credentials, use an invite code |
 | Export compliance | Already declared: `ITSAppUsesNonExemptEncryption = false` in Info.plist |
 | Content rights | No third-party content |
 | Age rating | 4+ expected. The app has no user-generated content visible to strangers — content is only ever exchanged between two mutually-paired people |
+
+### The Support URL must reach a page that offers support
+
+Until 2026-08-19 the Support URL was the bare landing page, which had no email
+address, no contact form and no support section anywhere on it — only a download
+button and a privacy link. Guideline 1.5 expects a user to be able to reach the
+developer from that URL, and a marketing page with no contact route is a routine
+rejection.
+
+`public/support/index.html` is now the target. It answers what people actually
+write in about, and every answer is derived from the code rather than from
+memory: invite-code format and its 48-hour expiry, the "space already has two
+people" case, the quiet-hours behaviour that otherwise reads as "notifications
+are broken", location being optional, reinstalling, and the delete-account path.
+
+Three drafting errors were caught against the source before it shipped, which is
+the argument for grepping rather than recalling: the example code `TWLI-4821`
+(taken from the design comp, and a string `makeCode()` can never mint because I
+and L are excluded), the claim that digits 0 and 1 are excluded (it is the
+letters I, L and O that are), and Quiet hours being placed under
+`Our space → Notifications` when it is its own screen off `Our space`.
 
 ---
 
@@ -152,6 +173,10 @@ Work top to bottom. Anything unchecked blocks the upload.
       (`https://testflight.apple.com/join/jsJTMSdN`); swap both to
       `https://apps.apple.com/app/id<APP_ID>` the day the app is approved
 - [ ] Screenshots for every required device size, from a **populated** space
+- [ ] Screenshots are NEWER than the last visual fix. `05-distance.png` shipped a
+      globe whose plane flew beside the route instead of along it, because the
+      shot was captured 18 Aug 02:38 and the fix landed 19 Aug — compare
+      `ls -la ~/Desktop/Tweli-store-screenshots/*/` against `git log` before upload
 - [ ] App Privacy answers entered per §3
 - [ ] Review notes pasted per §2, with the codes matching what `--status` reports
 - [ ] Privacy Policy URL and Support URL set
@@ -163,6 +188,13 @@ Work top to bottom. Anything unchecked blocks the upload.
 `Tweli/Tweli.entitlements` declares `aps-environment = development`. That looks
 wrong for a shipping build and is not: entitlements are rewritten at **export**,
 not at archive time.
+
+> **The verification below predates a change to `Tweli.entitlements` on
+> 2026-08-19** (see "Entitlements removed", after the table). The rewrite it
+> documents is a property of export and is unaffected in principle — but this
+> table is evidence from one specific artifact, and that artifact no longer
+> matches the source. Re-run the check against the next exported `.ipa` before
+> submitting, and update the date here.
 
 Verified on 2026-08-13 by exporting a real App Store `.ipa`:
 
@@ -184,6 +216,38 @@ codesign -d --entitlements :- /tmp/tweli-ipa/Payload/Tweli.app 2>/dev/null \
 
 Expected: `production` and `false`. Anything else means the export used the
 wrong profile.
+
+### Entitlements removed on 2026-08-19 — do not restore
+
+Both were stale declarations of capabilities the app does not use. Neither was
+causing a failure; the risk is that regenerating signing assets later starts
+enforcing a capability the App ID never enabled, and you debug it under launch
+pressure.
+
+| Removed | From | Why |
+|---|---|---|
+| `CKSharingSupported` | `Tweli/Info.plist` | CloudKit is gone — only comments in `FirebaseService.swift` still mention it. The key told iOS the app accepts CKShare invitation URLs, which it cannot. Inert without a CloudKit container, but untrue |
+| `com.apple.developer.associated-domains.mdm-managed` | `Tweli/Tweli.entitlements` | Lets an MDM server manage the app's associated domains. A consumer app has no MDM story |
+
+`com.apple.developer.associated-domains` itself is KEPT and is required —
+`TweliApp.swift` handles `NSUserActivityTypeBrowsingWeb` for https invite links,
+and `public/.well-known/apple-app-site-association` serves the matching AASA.
+Note `firebase.json` sets `"appAssociation": "NONE"`, which does not disable
+universal links: it stops Firebase auto-generating an AASA so the hand-written
+file is served instead, with a `headers` rule forcing `application/json`.
+
+Verified after removal by building `-destination 'generic/platform=iOS'` — a real
+device build, which is the only kind that runs `ProcessProductPackaging` against
+a provisioning profile. A simulator build is ad-hoc signed and its entitlement
+blob comes back empty, so it proves nothing here.
+
+### iPhone orientation locked to portrait on 2026-08-19
+
+`INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone` previously allowed
+landscape left and right. Nothing in the app was ever built for it: there is no
+`horizontalSizeClass` / `verticalSizeClass` query anywhere in the source, and
+seven screens are half-sheets sized by screen-height fraction — `.fraction(0.62)`
+in landscape is a sliver. App Review rotates the device.
 
 Signing identity in use: `Apple Distribution: Shalinth Adithyan (649T62WKAQ)`,
 via the cached `iOS Team Store Provisioning Profile: me.adithyan.shalinth.Tweli`.
