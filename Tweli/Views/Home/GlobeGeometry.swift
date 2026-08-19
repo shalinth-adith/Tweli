@@ -78,6 +78,43 @@ enum GlobeGeometry {
         return (lon, lat)
     }
 
+    // MARK: - The route (single source of truth for the arc AND the plane)
+
+    /// One projected sample of the great-circle route `a` → `b` at parameter `t`.
+    ///
+    /// The arc and the plane in DistanceJourneyView BOTH go through this. They
+    /// used to each do their own interpolate-then-project, which is how the
+    /// plane kept flying the design comp's fixed India→UAE line after the arc
+    /// had been moved onto the couple's real coordinates. Divergence is now a
+    /// compile-time impossibility rather than something a reviewer has to spot.
+    static func routeSample(from a: (lon: Double, lat: Double),
+                            to b: (lon: Double, lat: Double),
+                            t: Double) -> (point: CGPoint, visible: Bool) {
+        let g = interpolate(a, b, min(max(t, 0), 1))
+        return project(lon: g.lon, lat: g.lat)
+    }
+
+    /// Where the little plane sits at `t`, plus the screen-space bearing to
+    /// rotate it by (radians, 0 = pointing right in viewBox coordinates).
+    static func routePlane(from a: (lon: Double, lat: Double),
+                           to b: (lon: Double, lat: Double),
+                           t: Double) -> (point: CGPoint, visible: Bool, bearing: Double) {
+        let dt = 0.012
+        let t0 = min(max(t, 0), 1)
+        // Sample the tangent forward, except at the very end: a forward
+        // lookahead there collapses onto the same point and atan2(0, 0) would
+        // snap the nose due east for the whole hold. Sample backwards instead.
+        let ahead = t0 + dt <= 1
+        let (ta, tb) = ahead ? (t0, t0 + dt) : (max(0, t0 - dt), t0)
+        let p0 = routeSample(from: a, to: b, t: ta)
+        let p1 = routeSample(from: a, to: b, t: tb)
+        let here = ahead ? p0 : p1       // the sample that is actually at `t`
+        let d = CGPoint(x: p1.point.x - p0.point.x, y: p1.point.y - p0.point.y)
+        // Degenerate only when the two cities coincide; keep the last sane nose.
+        let bearing = (abs(d.x) < 1e-9 && abs(d.y) < 1e-9) ? 0 : atan2(Double(d.y), Double(d.x))
+        return (here.point, here.visible, bearing)
+    }
+
     private static func toCartesian(_ p: (lon: Double, lat: Double)) -> (x: Double, y: Double, z: Double) {
         let λ = p.lon * .pi / 180, φ = p.lat * .pi / 180
         return (cos(φ) * cos(λ), cos(φ) * sin(λ), sin(φ))

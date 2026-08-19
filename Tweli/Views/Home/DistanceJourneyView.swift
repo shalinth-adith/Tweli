@@ -162,21 +162,22 @@ struct DistanceJourneyView: View {
     }
 
     /// Plane at great-circle parameter `t`, oriented along its bearing.
+    ///
+    /// It must fly the SAME great circle `arcPath` draws. It used to interpolate
+    /// the hardcoded `GlobeGeometry.puducherry` → `.abuDhabi` while the arc and
+    /// the pins had already been moved onto the real coordinates, so the plane
+    /// tracked a fixed India→UAE line beside a gold route it never touched —
+    /// visibly flying off the line for every couple who wasn't that pair.
     private func planeView(at t: CGFloat) -> some View {
-        let g  = GlobeGeometry.interpolate(GlobeGeometry.puducherry, GlobeGeometry.abuDhabi, Double(t))
-        let g2 = GlobeGeometry.interpolate(GlobeGeometry.puducherry, GlobeGeometry.abuDhabi,
-                                           Double(min(1, t + 0.012)))
-        let s  = GlobeGeometry.project(lon: g.lon,  lat: g.lat)
-        let s2 = GlobeGeometry.project(lon: g2.lon, lat: g2.lat)
-        let bearing = atan2(s2.point.y - s.point.y, s2.point.x - s.point.x)
+        let f = GlobeGeometry.routePlane(from: myPoint, to: partnerPoint, t: Double(t))
         return PlaneTriangle()
             .fill(.white)
             .overlay(PlaneTriangle().stroke(Color(red: 0.788, green: 0.565, blue: 0.165),
                                             lineWidth: 0.8))
             .frame(width: 12, height: 15)
-            .rotationEffect(.radians(bearing) + .degrees(90))
-            .position(s.point)
-            .opacity(s.visible ? 1 : 0)
+            .rotationEffect(.radians(f.bearing) + .degrees(90))
+            .position(f.point)
+            .opacity(f.visible ? 1 : 0)
     }
 
     private func pin(color: Color, tip: CGPoint) -> some View {
@@ -252,9 +253,8 @@ struct DistanceJourneyView: View {
         var started = false
         let n = 80
         for i in 0...n {
-            let g = GlobeGeometry.interpolate(myPoint, partnerPoint,
-                                              Double(i) / Double(n))
-            let pr = GlobeGeometry.project(lon: g.lon, lat: g.lat)
+            let pr = GlobeGeometry.routeSample(from: myPoint, to: partnerPoint,
+                                               t: Double(i) / Double(n))
             guard pr.visible else { started = false; continue }
             if started { p.addLine(to: pr.point) } else { p.move(to: pr.point); started = true }
         }
